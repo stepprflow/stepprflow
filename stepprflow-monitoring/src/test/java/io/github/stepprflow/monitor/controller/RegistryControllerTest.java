@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
@@ -222,6 +223,55 @@ class RegistryControllerTest {
 
             // Then
             verify(registryService).heartbeat("notification-service", "instance-abc");
+        }
+    }
+
+    @Nested
+    @DisplayName("DELETE /workflows/{workflowId} - purgeWorkflow()")
+    class PurgeWorkflowTests {
+
+        @Test
+        @DisplayName("should return 204 and call service")
+        void shouldReturn204AndCallService() {
+            // When
+            ResponseEntity<Void> response = controller.purgeWorkflow("wf-1");
+
+            // Then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+            verify(registryService).purgeWorkflow("wf-1");
+        }
+    }
+
+    @Nested
+    @DisplayName("DELETE /workflows/inactive - purgeAllInactiveWorkflows()")
+    class PurgeAllInactiveWorkflowsTests {
+
+        @Test
+        @DisplayName("should return 200 with purged count")
+        void shouldReturn200WithPurgedCount() {
+            // Given
+            when(registryService.purgeAllInactiveWorkflows()).thenReturn(5L);
+
+            // When
+            ResponseEntity<Map<String, Long>> response = controller.purgeAllInactiveWorkflows();
+
+            // Then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(response.getBody()).containsEntry("purgedCount", 5L);
+        }
+
+        @Test
+        @DisplayName("should return 200 with zero count when none inactive")
+        void shouldReturn200WithZeroCount() {
+            // Given
+            when(registryService.purgeAllInactiveWorkflows()).thenReturn(0L);
+
+            // When
+            ResponseEntity<Map<String, Long>> response = controller.purgeAllInactiveWorkflows();
+
+            // Then
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(response.getBody()).containsEntry("purgedCount", 0L);
         }
     }
 }

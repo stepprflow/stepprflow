@@ -1,0 +1,139 @@
+# =============================================================================
+# Standalone image: Steppr Flow Monitoring + UI + MongoDB
+# Usage:
+#   docker build -f Dockerfile.standalone -t stepprflow-standalone .
+#   docker run -p 8090:8090 stepprflow-standalone
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Build the Vue.js UI
+# -----------------------------------------------------------------------------
+FROM node:22-alpine AS ui-builder
+
+WORKDIR /ui
+COPY stepprflow-ui/package.json stepprflow-ui/package-lock.json* ./
+RUN npm ci
+COPY stepprflow-ui/ .
+RUN npm run build
+
+# -----------------------------------------------------------------------------
+# Stage 2: Build the Spring Boot application (with UI in static/)
+# -----------------------------------------------------------------------------
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
+
+WORKDIR /app
+
+# Copy pom files first for better caching
+COPY pom.xml .
+COPY stepprflow-core/pom.xml stepprflow-core/
+COPY stepprflow-spring-kafka/pom.xml stepprflow-spring-kafka/
+COPY stepprflow-spring-rabbitmq/pom.xml stepprflow-spring-rabbitmq/
+COPY stepprflow-monitoring/pom.xml stepprflow-monitoring/
+
+# Download dependencies (cached layer)
+RUN mvn dependency:go-offline -pl stepprflow-monitoring -am -q || true
+
+# Copy source code
+COPY stepprflow-core/src stepprflow-core/src
+COPY stepprflow-spring-kafka/src stepprflow-spring-kafka/src
+COPY stepprflow-spring-rabbitmq/src stepprflow-spring-rabbitmq/src
+COPY stepprflow-monitoring/src stepprflow-monitoring/src
+
+# Copy checkstyle config
+COPY config/checkstyle/checkstyle.xml config/checkstyle/checkstyle.xml
+
+# Inject the built UI into Spring Boot's static resources
+COPY --from=ui-builder /ui/dist/ stepprflow-monitoring/src/main/resources/static/
+
+# Build the application
+RUN mvn clean package -pl stepprflow-monitoring -am -DskipTests -q
+
+# -----------------------------------------------------------------------------
+# Stage 3: Extract Spring Boot layers
+# -----------------------------------------------------------------------------
+FROM eclipse-temurin:21-jdk-alpine AS layers
+
+WORKDIR /app
+COPY --from=builder /app/stepprflow-monitoring/target/*.jar app.jar
+RUN java -Djarmode=layertools -jar app.jar extract
+
+# -----------------------------------------------------------------------------
+# Stage 4: Final runtime — JRE + MongoDB
+# -----------------------------------------------------------------------------
+FROM eclipse-temurin:21-jre-alpine
+
+LABEL maintainer="Steppr Flow Team"
+LABEL description="Steppr Flow Monitoring — standalone (App + UI + MongoDB)"
+
+# Install MongoDB 7.0 and supervisord
+RUN apk add --no-cache \
+        mongodb \
+        supervisor \
+        wget
+
+WORKDIR /app
+
+# Create users and directories
+RUN addgroup -g 1000 stepprflow && \
+    adduser -u 1000 -G stepprflow -s /bin/sh -D stepprflow && \
+    mkdir -p /data/db /var/log/supervisor && \
+    chown -R stepprflow:stepprflow /data/db
+
+# Copy Spring Boot layers
+COPY --from=layers /app/dependencies/ ./
+COPY --from=layers /app/spring-boot-loader/ ./
+COPY --from=layers /app/snapshot-dependencies/ ./
+COPY --from=layers /app/application/ ./
+RUN chown -R stepprflow:stepprflow /app
+
+# Supervisord configuration to run both MongoDB and the Java app
+COPY <<'EOF' /etc/supervisord.conf
+[supervisord]
+nodaemon=true
+user=root
+logfile=/var/log/supervisor/supervisord.log
+pidfile=/var/run/supervisord.pid
+
+[program:mongodb]
+command=mongod --dbpath /data/db --bind_ip_all --noauth
+autostart=true
+autorestart=true
+stdout_logfile=/var/log/supervisor/mongodb.log
+stderr_logfile=/var/log/supervisor/mongodb-err.log
+priority=10
+
+[program:stepprflow]
+command=java %(ENV_JAVA_OPTS)s org.springframework.boot.loader.launch.JarLauncher
+directory=/app
+user=stepprflow
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+startsecs=5
+startretries=3
+priority=20
+EOF
+
+# Expose monitoring port
+EXPOSE 8090
+
+# MongoDB data volume
+VOLUME /data/db
+
+# JVM options
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -Djava.security.egd=file:/dev/./urandom"
+
+# Point Spring Boot to the embedded MongoDB
+ENV MONGODB_URI="mongodb://localhost:27017/stepprflow"
+
+# No external Kafka by default — override at runtime if needed
+ENV KAFKA_BOOTSTRAP_SERVERS="localhost:9092"
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8090/actuator/health || exit 1
+
+ENTRYPOINT ["supervisord", "-c", "/etc/supervisord.conf"]

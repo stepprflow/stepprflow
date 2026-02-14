@@ -1,7 +1,6 @@
 package io.github.stepprflow.core.service;
 
 import io.github.stepprflow.core.broker.MessageBroker;
-import io.github.stepprflow.core.exception.WorkflowException;
 import io.github.stepprflow.core.model.WorkflowDefinition;
 import io.github.stepprflow.core.model.WorkflowMessage;
 import io.github.stepprflow.core.model.WorkflowStatus;
@@ -65,9 +64,6 @@ public class WorkflowStarterImpl implements WorkflowStarter {
             final Object payload,
             final Map<String, Object> metadata) {
         WorkflowDefinition definition = registry.getDefinition(topic);
-        if (definition == null) {
-            throw new WorkflowException("Unknown workflow topic: " + topic);
-        }
 
         String executionId = UUID.randomUUID().toString();
 
@@ -75,9 +71,15 @@ public class WorkflowStarterImpl implements WorkflowStarter {
         String securityContext = securityContextPropagator.capture();
         log.debug("Captured security context: {}", securityContext != null ? "present" : "null");
 
-        // Get the first step's label
-        String firstStepLabel = definition.getStep(1) != null
-                ? definition.getStep(1).getLabel() : null;
+        int totalSteps = 0;
+        String firstStepLabel = null;
+        if (definition != null) {
+            totalSteps = definition.getTotalSteps();
+            firstStepLabel = definition.getStep(1) != null
+                    ? definition.getStep(1).getLabel() : null;
+        } else {
+            log.info("Workflow topic '{}' not found locally, forwarding to remote service", topic);
+        }
 
         WorkflowMessage message = WorkflowMessage.builder()
                 .executionId(executionId)
@@ -85,7 +87,7 @@ public class WorkflowStarterImpl implements WorkflowStarter {
                 .topic(topic)
                 .serviceName(serviceName)
                 .currentStep(1)
-                .totalSteps(definition.getTotalSteps())
+                .totalSteps(totalSteps)
                 .currentStepLabel(firstStepLabel)
                 .status(WorkflowStatus.PENDING)
                 .payload(payload)
@@ -113,18 +115,21 @@ public class WorkflowStarterImpl implements WorkflowStarter {
             final String topic,
             final Object payload) {
         WorkflowDefinition definition = registry.getDefinition(topic);
-        if (definition == null) {
-            throw new WorkflowException("Unknown workflow topic: " + topic);
-        }
 
         String executionId = UUID.randomUUID().toString();
 
         // Capture security context from current thread
         String securityContext = securityContextPropagator.capture();
 
-        // Get the first step's label
-        String firstStepLabel = definition.getStep(1) != null
-                ? definition.getStep(1).getLabel() : null;
+        int totalSteps = 0;
+        String firstStepLabel = null;
+        if (definition != null) {
+            totalSteps = definition.getTotalSteps();
+            firstStepLabel = definition.getStep(1) != null
+                    ? definition.getStep(1).getLabel() : null;
+        } else {
+            log.info("Workflow topic '{}' not found locally, forwarding to remote service", topic);
+        }
 
         WorkflowMessage message = WorkflowMessage.builder()
                 .executionId(executionId)
@@ -132,7 +137,7 @@ public class WorkflowStarterImpl implements WorkflowStarter {
                 .topic(topic)
                 .serviceName(serviceName)
                 .currentStep(1)
-                .totalSteps(definition.getTotalSteps())
+                .totalSteps(totalSteps)
                 .currentStepLabel(firstStepLabel)
                 .status(WorkflowStatus.PENDING)
                 .payload(payload)

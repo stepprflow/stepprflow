@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * REST API for workflow registration from microservices.
@@ -55,6 +56,26 @@ public class RegistryController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(workflow);
+    }
+
+    @Operation(summary = "Purge all inactive workflows",
+            description = "Delete all workflows with INACTIVE status from the registry")
+    @ApiResponse(responseCode = "200", description = "Inactive workflows purged")
+    @DeleteMapping("/workflows/inactive")
+    public ResponseEntity<Map<String, Long>> purgeAllInactiveWorkflows() {
+        long count = registryService.purgeAllInactiveWorkflows();
+        return ResponseEntity.ok(Map.of("purgedCount", count));
+    }
+
+    @Operation(summary = "Purge a single workflow",
+            description = "Delete a single INACTIVE workflow by its MongoDB ID")
+    @ApiResponse(responseCode = "204", description = "Workflow purged")
+    @ApiResponse(responseCode = "404", description = "Workflow not found")
+    @ApiResponse(responseCode = "409", description = "Workflow is still ACTIVE")
+    @DeleteMapping("/workflows/{workflowId}")
+    public ResponseEntity<Void> purgeWorkflow(@PathVariable String workflowId) {
+        registryService.purgeWorkflow(workflowId);
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Unregister service", description = "Unregister a service instance (called on shutdown)")

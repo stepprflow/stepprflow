@@ -4,6 +4,7 @@ import io.github.stepprflow.core.model.WorkflowRegistrationRequest;
 import io.github.stepprflow.monitor.MonitorProperties;
 import io.github.stepprflow.monitor.model.RegisteredWorkflow;
 import io.github.stepprflow.monitor.repository.RegisteredWorkflowRepository;
+import io.github.stepprflow.monitor.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -23,6 +24,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -851,6 +853,97 @@ class WorkflowRegistryServiceTest {
             verify(repository).save(workflowCaptor.capture());
             RegisteredWorkflow saved = workflowCaptor.getValue();
             assertThat(saved.getStatus()).isEqualTo(RegisteredWorkflow.Status.ACTIVE);
+        }
+    }
+
+    @Nested
+    @DisplayName("purgeWorkflow() method")
+    class PurgeWorkflowTests {
+
+        @Test
+        @DisplayName("Should delete INACTIVE workflow by ID")
+        void shouldDeleteInactiveWorkflow() {
+            RegisteredWorkflow workflow = RegisteredWorkflow.builder()
+                    .id("wf-1")
+                    .topic("order-workflow")
+                    .status(RegisteredWorkflow.Status.INACTIVE)
+                    .build();
+
+            when(repository.findById("wf-1")).thenReturn(Optional.of(workflow));
+
+            registryService.purgeWorkflow("wf-1");
+
+            verify(repository).deleteById("wf-1");
+        }
+
+        @Test
+        @DisplayName("Should throw ResourceNotFoundException when workflow not found")
+        void shouldThrowNotFoundWhenWorkflowMissing() {
+            when(repository.findById("unknown")).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> registryService.purgeWorkflow("unknown"))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("Should throw IllegalStateException when workflow is ACTIVE")
+        void shouldThrowIllegalStateWhenActive() {
+            RegisteredWorkflow workflow = RegisteredWorkflow.builder()
+                    .id("wf-1")
+                    .topic("order-workflow")
+                    .status(RegisteredWorkflow.Status.ACTIVE)
+                    .build();
+
+            when(repository.findById("wf-1")).thenReturn(Optional.of(workflow));
+
+            assertThatThrownBy(() -> registryService.purgeWorkflow("wf-1"))
+                    .isInstanceOf(IllegalStateException.class);
+        }
+
+        @Test
+        @DisplayName("Should not delete when workflow is ACTIVE")
+        void shouldNotDeleteWhenActive() {
+            RegisteredWorkflow workflow = RegisteredWorkflow.builder()
+                    .id("wf-1")
+                    .topic("order-workflow")
+                    .status(RegisteredWorkflow.Status.ACTIVE)
+                    .build();
+
+            when(repository.findById("wf-1")).thenReturn(Optional.of(workflow));
+
+            try {
+                registryService.purgeWorkflow("wf-1");
+            } catch (IllegalStateException ignored) {
+                // expected
+            }
+
+            verify(repository, never()).deleteById(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("purgeAllInactiveWorkflows() method")
+    class PurgeAllInactiveWorkflowsTests {
+
+        @Test
+        @DisplayName("Should return count of purged workflows")
+        void shouldReturnPurgedCount() {
+            when(repository.deleteByStatus(RegisteredWorkflow.Status.INACTIVE)).thenReturn(3L);
+
+            long count = registryService.purgeAllInactiveWorkflows();
+
+            assertThat(count).isEqualTo(3);
+            verify(repository).deleteByStatus(RegisteredWorkflow.Status.INACTIVE);
+        }
+
+        @Test
+        @DisplayName("Should return 0 when no inactive workflows exist")
+        void shouldReturnZeroWhenNoneInactive() {
+            when(repository.deleteByStatus(RegisteredWorkflow.Status.INACTIVE)).thenReturn(0L);
+
+            long count = registryService.purgeAllInactiveWorkflows();
+
+            assertThat(count).isZero();
         }
     }
 }

@@ -7,6 +7,7 @@ import io.github.stepprflow.core.model.WorkflowMessage;
 import io.github.stepprflow.core.model.WorkflowStatus;
 import io.github.stepprflow.core.service.WorkflowRegistry;
 import io.github.stepprflow.monitor.model.WorkflowExecution;
+import io.github.stepprflow.monitor.repository.RegisteredWorkflowRepository;
 import io.github.stepprflow.monitor.repository.WorkflowExecutionRepository;
 import io.github.stepprflow.monitor.websocket.WorkflowBroadcaster;
 import lombok.extern.slf4j.Slf4j;
@@ -32,15 +33,18 @@ public class ExecutionPersistenceService {
     private final WorkflowExecutionRepository repository;
     private final WorkflowBroadcaster broadcaster;
     private final WorkflowRegistry workflowRegistry;
+    private final RegisteredWorkflowRepository registeredWorkflowRepository;
 
     @Autowired
     public ExecutionPersistenceService(
             WorkflowExecutionRepository repository,
             @Autowired(required = false) WorkflowBroadcaster broadcaster,
-            WorkflowRegistry workflowRegistry) {
+            WorkflowRegistry workflowRegistry,
+            RegisteredWorkflowRepository registeredWorkflowRepository) {
         this.repository = repository;
         this.broadcaster = broadcaster;
         this.workflowRegistry = workflowRegistry;
+        this.registeredWorkflowRepository = registeredWorkflowRepository;
     }
 
     /**
@@ -95,11 +99,17 @@ public class ExecutionPersistenceService {
         List<WorkflowExecution.ExecutionAttempt> attempts = new ArrayList<>();
         attempts.add(firstAttempt);
 
+        // Enrich totalSteps from registered workflows when not provided (cross-service start)
+        int totalSteps = message.getTotalSteps();
+        if (totalSteps == 0) {
+            totalSteps = resolveStepsFromRegistry(message.getTopic());
+        }
+
         return WorkflowExecution.builder()
                 .executionId(message.getExecutionId())
                 .correlationId(message.getCorrelationId())
                 .topic(message.getTopic())
-                .totalSteps(message.getTotalSteps())
+                .totalSteps(totalSteps)
                 .payload(message.getPayload())
                 .payloadType(message.getPayloadType())
                 .securityContext(message.getSecurityContext())
@@ -108,6 +118,15 @@ public class ExecutionPersistenceService {
                 .stepHistory(new ArrayList<>())
                 .executionAttempts(attempts)
                 .build();
+    }
+
+    /**
+     * Resolve totalSteps from registered workflow definitions in MongoDB.
+     */
+    private int resolveStepsFromRegistry(String topic) {
+        return registeredWorkflowRepository.findByTopic(topic)
+                .map(rw -> rw.getSteps().size())
+                .orElse(0);
     }
 
     private void updateExecution(WorkflowExecution execution, WorkflowMessage message) {
