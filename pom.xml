@@ -8,7 +8,7 @@
 
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-parent</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>0.0.1</version>
     <packaging>pom</packaging>
 
     <name>Steppr Flow</name>
@@ -41,17 +41,15 @@
     </scm>
 
     <distributionManagement>
-        <!-- GitHub Packages -->
         <repository>
-            <id>github</id>
-            <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/stepprflow/stepprflow</url>
+            <id>maven-releases</id>
+            <name>Ali Happy Kids Nexus Releases</name>
+            <url>https://repository.alihappykids.fr/repository/maven-releases</url>
         </repository>
-        <!-- Maven Central (Sonatype OSSRH) -->
         <snapshotRepository>
-            <id>ossrh</id>
-            <name>Sonatype Snapshots</name>
-            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+            <id>maven-snapshots</id>
+            <name>Ali Happy Kids Nexus Snapshots</name>
+            <url>https://repository.alihappykids.fr/repository/maven-snapshots</url>
         </snapshotRepository>
     </distributionManagement>
 
