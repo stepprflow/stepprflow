@@ -152,7 +152,7 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
         <!-- Spring Boot -->
-        <spring-boot.version>3.5.8</spring-boot.version>
+        <spring-boot.version>4.0.2</spring-boot.version>
 
         <!-- Testcontainers -->
         <testcontainers.version>1.20.4</testcontainers.version>
