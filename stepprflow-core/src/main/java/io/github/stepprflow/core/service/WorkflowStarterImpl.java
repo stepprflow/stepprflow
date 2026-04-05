@@ -78,7 +78,8 @@ public class WorkflowStarterImpl implements WorkflowStarter {
             firstStepLabel = definition.getStep(1) != null
                     ? definition.getStep(1).getLabel() : null;
         } else {
-            log.info("Workflow topic '{}' not found locally, forwarding to remote service", topic);
+            log.info("Forwarding to remote workflow: topic={}, serviceName={}, executionId={}",
+                     topic, serviceName, executionId);
         }
 
         WorkflowMessage message = WorkflowMessage.builder()
@@ -128,7 +129,7 @@ public class WorkflowStarterImpl implements WorkflowStarter {
             firstStepLabel = definition.getStep(1) != null
                     ? definition.getStep(1).getLabel() : null;
         } else {
-            log.info("Workflow topic '{}' not found locally, forwarding to remote service", topic);
+            log.info("Workflow topic '{}' not registered locally, will be forwarded on send", topic);
         }
 
         WorkflowMessage message = WorkflowMessage.builder()
