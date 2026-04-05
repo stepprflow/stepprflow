@@ -58,26 +58,31 @@ COPY --from=builder /app/stepprflow-monitoring/target/*.jar app.jar
 RUN java -Djarmode=layertools -jar app.jar extract
 
 # -----------------------------------------------------------------------------
-# Stage 4: Final runtime — JRE + MongoDB
+# Stage 4: Final runtime — JRE (Ubuntu) + MongoDB 7.0
 # -----------------------------------------------------------------------------
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre-jammy
 
 LABEL maintainer="Steppr Flow Team"
 LABEL description="Steppr Flow Monitoring — standalone (App + UI + MongoDB)"
 
-# Install MongoDB 7.0 and supervisord
-RUN apk add --no-cache \
-        mongodb \
-        supervisor \
-        wget
+# Install MongoDB 7.0
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gnupg curl supervisor wget && \
+    curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg && \
+    echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" \
+        > /etc/apt/sources.list.d/mongodb-org-7.0.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends mongodb-org-server mongodb-org-mongos && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # Create users and directories
-RUN addgroup -g 1000 stepprflow && \
-    adduser -u 1000 -G stepprflow -s /bin/sh -D stepprflow && \
-    mkdir -p /data/db /var/log/supervisor && \
-    chown -R stepprflow:stepprflow /data/db
+RUN groupadd -g 1000 stepprflow && \
+    useradd -u 1000 -g stepprflow -m -s /bin/bash stepprflow && \
+    mkdir -p /data/db /var/log/supervisor /var/run && \
+    chown -R mongodb:mongodb /data/db
 
 # Copy Spring Boot layers
 COPY --from=layers /app/dependencies/ ./
@@ -86,16 +91,16 @@ COPY --from=layers /app/snapshot-dependencies/ ./
 COPY --from=layers /app/application/ ./
 RUN chown -R stepprflow:stepprflow /app
 
-# Supervisord configuration to run both MongoDB and the Java app
-COPY <<'EOF' /etc/supervisord.conf
+# Supervisord configuration
+COPY <<'EOF' /etc/supervisor/conf.d/stepprflow.conf
 [supervisord]
 nodaemon=true
-user=root
 logfile=/var/log/supervisor/supervisord.log
 pidfile=/var/run/supervisord.pid
 
 [program:mongodb]
 command=mongod --dbpath /data/db --bind_ip_all --noauth
+user=mongodb
 autostart=true
 autorestart=true
 stdout_logfile=/var/log/supervisor/mongodb.log
@@ -136,4 +141,4 @@ ENV KAFKA_BOOTSTRAP_SERVERS="localhost:9092"
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8090/actuator/health || exit 1
 
-ENTRYPOINT ["supervisord", "-c", "/etc/supervisord.conf"]
+ENTRYPOINT ["supervisord", "-c", "/etc/supervisor/conf.d/stepprflow.conf"]
