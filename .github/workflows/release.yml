@@ -1,6 +1,9 @@
 name: Release
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       version-type:
@@ -39,7 +42,7 @@ jobs:
       packages: write
 
     outputs:
-      version: ${{ steps.new-version.outputs.version }}
+      version: ${{ steps.resolve-version.outputs.version }}
 
     steps:
       - name: Checkout code
@@ -65,58 +68,48 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Get current version
-        id: current-version
+      - name: Resolve version
+        id: resolve-version
         run: |
-          CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          echo "Current version: $CURRENT_VERSION"
+          if [ "${{ github.event_name }}" == "push" ]; then
+            # Triggered by tag push — use version from tag (strip 'v' prefix)
+            VERSION="${GITHUB_REF_NAME#v}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "mode=tag" >> $GITHUB_OUTPUT
+            echo "Releasing from tag: $VERSION"
+          else
+            # Triggered by workflow_dispatch — bump version
+            CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+            BASE_VERSION="${CURRENT_VERSION%-SNAPSHOT}"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
 
-      - name: Calculate new version
-        id: new-version
-        run: |
-          CURRENT_VERSION="${{ steps.current-version.outputs.version }}"
-          # Remove -SNAPSHOT suffix
-          BASE_VERSION="${CURRENT_VERSION%-SNAPSHOT}"
+            case "${{ inputs.version-type }}" in
+              major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+              minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+              patch) PATCH=$((PATCH + 1)) ;;
+            esac
 
-          # Parse version components
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VERSION"
+            NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            if [ "${{ inputs.prerelease }}" == "true" ]; then
+              NEW_VERSION="${NEW_VERSION}-RC1"
+            fi
 
-          # Bump version based on input
-          case "${{ inputs.version-type }}" in
-            major)
-              MAJOR=$((MAJOR + 1))
-              MINOR=0
-              PATCH=0
-              ;;
-            minor)
-              MINOR=$((MINOR + 1))
-              PATCH=0
-              ;;
-            patch)
-              PATCH=$((PATCH + 1))
-              ;;
-          esac
-
-          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-
-          if [ "${{ inputs.prerelease }}" == "true" ]; then
-            NEW_VERSION="${NEW_VERSION}-RC1"
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "mode=dispatch" >> $GITHUB_OUTPUT
+            echo "Bumping to: $NEW_VERSION"
           fi
 
-          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "New version: $NEW_VERSION"
-
       - name: Update version in POMs
+        if: steps.resolve-version.outputs.mode == 'dispatch'
         run: |
-          mvn versions:set -DnewVersion=${{ steps.new-version.outputs.version }} -DgenerateBackupPoms=false
+          mvn versions:set -DnewVersion=${{ steps.resolve-version.outputs.version }} -DgenerateBackupPoms=false
           mvn versions:commit
 
       - name: Build and test
         run: mvn -B clean verify --file pom.xml
 
       - name: Publish to Maven Central
-        if: ${{ inputs.publish-to == 'maven-central' || inputs.publish-to == 'both' }}
+        if: github.event_name == 'push' || inputs.publish-to == 'maven-central' || inputs.publish-to == 'both'
         run: mvn -B deploy -Prelease -DskipTests --file pom.xml
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
@@ -124,9 +117,8 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Publish to GitHub Packages
-        if: ${{ inputs.publish-to == 'github-packages' || inputs.publish-to == 'both' }}
+        if: inputs.publish-to == 'github-packages' || inputs.publish-to == 'both'
         run: |
-          # Configure settings.xml for GitHub Packages
           mkdir -p ~/.m2
           cat > ~/.m2/settings.xml << EOF
           <settings>
@@ -143,19 +135,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Commit version change
+      - name: Commit version change and tag
+        if: steps.resolve-version.outputs.mode == 'dispatch'
         run: |
           git add -A
-          git commit -m "release: v${{ steps.new-version.outputs.version }}"
-          git tag "v${{ steps.new-version.outputs.version }}"
+          git commit -m "release: v${{ steps.resolve-version.outputs.version }}"
+          git tag "v${{ steps.resolve-version.outputs.version }}"
 
       - name: Prepare next development version
+        if: steps.resolve-version.outputs.mode == 'dispatch'
         run: |
-          # Calculate next SNAPSHOT version
-          VERSION="${{ steps.new-version.outputs.version }}"
-          # Remove RC suffix if present
+          VERSION="${{ steps.resolve-version.outputs.version }}"
           BASE="${VERSION%-RC*}"
-
           IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
           NEXT_PATCH=$((PATCH + 1))
           NEXT_VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}-SNAPSHOT"
@@ -167,24 +158,25 @@ jobs:
           git commit -m "chore: prepare for next development iteration ($NEXT_VERSION)"
 
       - name: Push changes
+        if: steps.resolve-version.outputs.mode == 'dispatch'
         run: |
           git push origin HEAD
-          git push origin "v${{ steps.new-version.outputs.version }}"
+          git push origin "v${{ steps.resolve-version.outputs.version }}"
 
       - name: Generate release notes
         id: release-notes
         run: |
-          # Get commits since last tag
           LAST_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
 
           if [ -n "$LAST_TAG" ]; then
-            COMMITS=$(git log $LAST_TAG..HEAD~1 --pretty=format:"- %s (%h)" --no-merges)
+            COMMITS=$(git log $LAST_TAG..HEAD --pretty=format:"- %s (%h)" --no-merges)
           else
-            COMMITS=$(git log HEAD~1 --pretty=format:"- %s (%h)" --no-merges | head -50)
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges | head -50)
           fi
 
-          # Create release notes
-          NOTES=$(cat << EOF
+          VERSION="${{ steps.resolve-version.outputs.version }}"
+
+          cat > release-notes.md << EOF
           ## What's Changed
 
           $COMMITS
@@ -197,8 +189,8 @@ jobs:
           \`\`\`xml
           <dependency>
               <groupId>io.github.stepprflow</groupId>
-              <artifactId>stepprflow-spring-boot-starter</artifactId>
-              <version>${{ steps.new-version.outputs.version }}</version>
+              <artifactId>stepprflow-core</artifactId>
+              <version>${VERSION}</version>
           </dependency>
           \`\`\`
 
@@ -207,7 +199,7 @@ jobs:
           <dependency>
               <groupId>io.github.stepprflow</groupId>
               <artifactId>stepprflow-spring-kafka</artifactId>
-              <version>${{ steps.new-version.outputs.version }}</version>
+              <version>${VERSION}</version>
           </dependency>
           \`\`\`
 
@@ -216,21 +208,17 @@ jobs:
           <dependency>
               <groupId>io.github.stepprflow</groupId>
               <artifactId>stepprflow-spring-rabbitmq</artifactId>
-              <version>${{ steps.new-version.outputs.version }}</version>
+              <version>${VERSION}</version>
           </dependency>
           \`\`\`
 
           ### Docker
           \`\`\`bash
-          docker pull ghcr.io/stepprflow/stepprflow-monitor:${{ steps.new-version.outputs.version }}
+          docker pull ghcr.io/stepprflow/stepprflow-monitor:${VERSION}
           \`\`\`
 
-          **Full Changelog**: https://github.com/stepprflow/stepprflow/compare/${LAST_TAG:-HEAD~50}...v${{ steps.new-version.outputs.version }}
+          **Full Changelog**: https://github.com/stepprflow/stepprflow/compare/${LAST_TAG:-HEAD~50}...v${VERSION}
           EOF
-          )
-
-          # Save to file for GitHub CLI
-          echo "$NOTES" > release-notes.md
 
       - name: Create GitHub Release
         env:
@@ -241,8 +229,8 @@ jobs:
             PRERELEASE_FLAG="--prerelease"
           fi
 
-          gh release create "v${{ steps.new-version.outputs.version }}" \
-            --title "Release v${{ steps.new-version.outputs.version }}" \
+          gh release create "v${{ steps.resolve-version.outputs.version }}" \
+            --title "Release v${{ steps.resolve-version.outputs.version }}" \
             --notes-file release-notes.md \
             $PRERELEASE_FLAG \
             stepprflow-core/target/*.jar \
