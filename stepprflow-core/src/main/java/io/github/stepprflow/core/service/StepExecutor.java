@@ -161,13 +161,12 @@ public class StepExecutor {
             } catch (ClassNotFoundException e) {
                 log.warn("Could not find payload class {}, falling back to step parameter type",
                          payloadType);
+                // Fall back to the step method's parameter type
+                Class<?>[] paramTypes = step.getMethod().getParameterTypes();
+                if (paramTypes.length == 1) {
+                    return objectMapper.convertValue(message.getPayload(), paramTypes[0]);
+                }
             }
-        }
-
-        // Fall back to the step method's parameter type
-        Class<?>[] paramTypes = step.getMethod().getParameterTypes();
-        if (paramTypes.length == 1) {
-            return objectMapper.convertValue(message.getPayload(), paramTypes[0]);
         }
 
         return message.getPayload();
