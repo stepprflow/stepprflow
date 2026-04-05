@@ -18,7 +18,7 @@
 
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
-        <gatling.version>3.11.5</gatling.version>
+        <gatling.version>3.14.9</gatling.version>
         <gatling-maven-plugin.version>4.9.6</gatling-maven-plugin.version>
     </properties>
 
