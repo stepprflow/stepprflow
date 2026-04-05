@@ -9,6 +9,7 @@ import io.github.stepprflow.core.model.WorkflowMessage;
 import io.github.stepprflow.core.model.WorkflowStatus;
 import io.github.stepprflow.core.service.WorkflowRegistry;
 import io.github.stepprflow.monitor.model.WorkflowExecution;
+import io.github.stepprflow.monitor.repository.RegisteredWorkflowRepository;
 import io.github.stepprflow.monitor.repository.WorkflowExecutionRepository;
 import io.github.stepprflow.monitor.websocket.WorkflowWebSocketHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +42,9 @@ class ExecutionPersistenceServiceTest {
 
     @Mock
     private WorkflowWebSocketHandler webSocketHandler;
+
+    @Mock
+    private RegisteredWorkflowRepository registeredWorkflowRepository;
 
     @InjectMocks
     private ExecutionPersistenceService persistenceService;
@@ -810,7 +814,7 @@ class ExecutionPersistenceServiceTest {
 
         @BeforeEach
         void setUp() {
-            serviceWithRegistry = new ExecutionPersistenceService(repository, webSocketHandler, workflowRegistry);
+            serviceWithRegistry = new ExecutionPersistenceService(repository, webSocketHandler, workflowRegistry, registeredWorkflowRepository);
         }
 
         @Test

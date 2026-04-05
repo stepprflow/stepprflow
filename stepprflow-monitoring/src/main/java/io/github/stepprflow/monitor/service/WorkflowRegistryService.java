@@ -4,6 +4,7 @@ import io.github.stepprflow.core.model.WorkflowRegistrationRequest;
 import io.github.stepprflow.monitor.MonitorProperties;
 import io.github.stepprflow.monitor.model.RegisteredWorkflow;
 import io.github.stepprflow.monitor.repository.RegisteredWorkflowRepository;
+import io.github.stepprflow.monitor.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -195,6 +196,38 @@ public class WorkflowRegistryService {
                 repository.save(workflow);
             }
         }
+    }
+
+    /**
+     * Purge (delete) a single workflow by its MongoDB ID.
+     * Only INACTIVE workflows can be purged.
+     *
+     * @param workflowId the MongoDB document ID
+     * @throws ResourceNotFoundException if the workflow does not exist
+     * @throws IllegalStateException     if the workflow is still ACTIVE
+     */
+    public void purgeWorkflow(String workflowId) {
+        RegisteredWorkflow workflow = repository.findById(workflowId)
+                .orElseThrow(() -> new ResourceNotFoundException("RegisteredWorkflow", workflowId));
+
+        if (workflow.getStatus() == RegisteredWorkflow.Status.ACTIVE) {
+            throw new IllegalStateException(
+                    "Cannot purge ACTIVE workflow " + workflowId + ". Deactivate it first.");
+        }
+
+        repository.deleteById(workflowId);
+        log.info("Purged inactive workflow: {} (topic={})", workflowId, workflow.getTopic());
+    }
+
+    /**
+     * Purge all INACTIVE workflows.
+     *
+     * @return the number of workflows deleted
+     */
+    public long purgeAllInactiveWorkflows() {
+        long count = repository.deleteByStatus(RegisteredWorkflow.Status.INACTIVE);
+        log.info("Purged {} inactive workflow(s)", count);
+        return count;
     }
 
     /**

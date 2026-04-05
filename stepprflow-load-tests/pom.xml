@@ -9,21 +9,21 @@
     <parent>
         <groupId>io.github.stepprflow</groupId>
         <artifactId>stepprflow-parent</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.0.0</version>
     </parent>
 
     <artifactId>stepprflow-load-tests</artifactId>
-    <name>Steppr Flow Load Tests</name>
-    <description>Performance and load tests for Steppr Flow</description>
+    <name>Stepprflow Load Tests</name>
+    <description>Performance and load tests for Stepprflow</description>
 
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
-        <gatling.version>3.11.5</gatling.version>
+        <gatling.version>3.14.9</gatling.version>
         <gatling-maven-plugin.version>4.9.6</gatling-maven-plugin.version>
     </properties>
 
     <dependencies>
-        <!-- Steppr Flow modules for integration -->
+        <!-- Stepprflow modules for integration -->
         <dependency>
             <groupId>io.github.stepprflow</groupId>
             <artifactId>stepprflow-core</artifactId>

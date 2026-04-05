@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.github.stepprflow</groupId>
         <artifactId>stepprflow-parent</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.0.0</version>
     </parent>
 
     <artifactId>stepprflow-ui</artifactId>
@@ -18,7 +18,7 @@
     <properties>
         <node.version>v22.13.1</node.version>
         <npm.version>10.9.2</npm.version>
-        <frontend-maven-plugin.version>1.15.1</frontend-maven-plugin.version>
+        <frontend-maven-plugin.version>2.0.0</frontend-maven-plugin.version>
     </properties>
 
     <build>

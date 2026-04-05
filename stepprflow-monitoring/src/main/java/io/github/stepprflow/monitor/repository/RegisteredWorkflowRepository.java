@@ -38,4 +38,12 @@ public interface RegisteredWorkflowRepository extends MongoRepository<Registered
      * Find workflows by service name.
      */
     List<RegisteredWorkflow> findByRegisteredByServiceName(String serviceName);
+
+    /**
+     * Delete all workflows with the given status.
+     *
+     * @param status the status to match
+     * @return the number of deleted documents
+     */
+    long deleteByStatus(RegisteredWorkflow.Status status);
 }

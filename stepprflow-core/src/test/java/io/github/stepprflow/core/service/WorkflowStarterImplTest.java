@@ -74,13 +74,15 @@ class WorkflowStarterImplTest {
     class StartTests {
 
         @Test
-        @DisplayName("Should throw exception when topic is unknown")
-        void shouldThrowExceptionWhenTopicUnknown() {
+        @DisplayName("Should forward message when topic is unknown locally")
+        void shouldForwardWhenTopicUnknownLocally() {
             when(registry.getDefinition("unknown-topic")).thenReturn(null);
 
-            assertThatThrownBy(() -> workflowStarter.start("unknown-topic", new TestPayload("")))
-                    .isInstanceOf(WorkflowException.class)
-                    .hasMessageContaining("Unknown workflow topic: unknown-topic");
+            String executionId = workflowStarter.start("unknown-topic", new TestPayload(""));
+
+            assertThat(executionId).isNotNull();
+            verify(messageBroker).send(eq("unknown-topic"), messageCaptor.capture());
+            assertThat(messageCaptor.getValue().getTotalSteps()).isZero();
         }
 
         @Test
@@ -202,15 +204,15 @@ class WorkflowStarterImplTest {
         }
 
         @Test
-        @DisplayName("Should complete exceptionally for unknown topic")
-        void shouldCompleteExceptionallyForUnknownTopic() {
+        @DisplayName("Should complete successfully for unknown topic (forwarded)")
+        void shouldCompleteSuccessfullyForUnknownTopic() throws Exception {
             when(registry.getDefinition("unknown-topic")).thenReturn(null);
 
             CompletableFuture<String> future = workflowStarter.startAsync("unknown-topic", new TestPayload("test"));
 
-            assertThatThrownBy(() -> future.get(5, TimeUnit.SECONDS))
-                    .isInstanceOf(ExecutionException.class)
-                    .hasCauseInstanceOf(WorkflowException.class);
+            String executionId = future.get(5, TimeUnit.SECONDS);
+            assertThat(executionId).isNotNull();
+            verify(messageBroker).send(eq("unknown-topic"), any(WorkflowMessage.class));
         }
     }
 
@@ -249,13 +251,15 @@ class WorkflowStarterImplTest {
         }
 
         @Test
-        @DisplayName("Should throw exception for unknown topic")
-        void shouldThrowExceptionForUnknownTopic() {
+        @DisplayName("Should return message with zero steps for unknown topic")
+        void shouldReturnMessageWithZeroStepsForUnknownTopic() {
             when(registry.getDefinition("unknown-topic")).thenReturn(null);
 
-            assertThatThrownBy(() -> workflowStarter.startAndGetMessage("unknown-topic", new TestPayload("test")))
-                    .isInstanceOf(WorkflowException.class)
-                    .hasMessageContaining("Unknown workflow topic");
+            WorkflowMessage message = workflowStarter.startAndGetMessage("unknown-topic", new TestPayload("test"));
+
+            assertThat(message).isNotNull();
+            assertThat(message.getTotalSteps()).isZero();
+            verify(messageBroker).send(eq("unknown-topic"), any(WorkflowMessage.class));
         }
     }
 

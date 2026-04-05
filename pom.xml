@@ -8,10 +8,10 @@
 
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-parent</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <packaging>pom</packaging>
 
-    <name>Steppr Flow</name>
+    <name>Stepprflow</name>
     <description>Multi-broker workflow orchestration framework for Spring Boot</description>
     <url>https://github.com/stepprflow/stepprflow</url>
 
@@ -28,7 +28,7 @@
             <id>alimhin</id>
             <name>Ali M'HIN</name>
             <email>alimhin@gmail.com</email>
-            <organization>Steppr Flow</organization>
+            <organization>Stepprflow</organization>
             <organizationUrl>https://github.com/stepprflow</organizationUrl>
         </developer>
     </developers>
@@ -41,17 +41,15 @@
     </scm>
 
     <distributionManagement>
-        <!-- GitHub Packages -->
         <repository>
-            <id>github</id>
-            <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/stepprflow/stepprflow</url>
+            <id>maven-releases</id>
+            <name>Ali Happy Kids Nexus Releases</name>
+            <url>https://repository.alihappykids.fr/repository/maven-releases</url>
         </repository>
-        <!-- Maven Central (Sonatype OSSRH) -->
         <snapshotRepository>
-            <id>ossrh</id>
-            <name>Sonatype Snapshots</name>
-            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+            <id>maven-snapshots</id>
+            <name>Ali Happy Kids Nexus Snapshots</name>
+            <url>https://repository.alihappykids.fr/repository/maven-snapshots</url>
         </snapshotRepository>
     </distributionManagement>
 
@@ -155,7 +153,7 @@
         <spring-boot.version>3.5.8</spring-boot.version>
 
         <!-- Testcontainers -->
-        <testcontainers.version>1.20.4</testcontainers.version>
+        <testcontainers.version>2.0.3</testcontainers.version>
 
         <!-- Resilience4j -->
         <resilience4j.version>2.2.0</resilience4j.version>
@@ -163,7 +161,7 @@
         <!-- Micrometer Tracing -->
         <micrometer-tracing.version>1.4.2</micrometer-tracing.version>
 
-        <!-- Steppr Flow version -->
+        <!-- Stepprflow version -->
         <stepprflow.version>${project.version}</stepprflow.version>
 
         <!-- JaCoCo -->
@@ -178,7 +176,7 @@
 
         <!-- Pitest (mutation testing) -->
         <pitest.version>1.17.4</pitest.version>
-        <pitest-junit5.version>1.2.1</pitest-junit5.version>
+        <pitest-junit5.version>1.2.3</pitest-junit5.version>
         <pitest.targetTests>io.github.stepprflow.*</pitest.targetTests>
         <pitest.targetClasses>io.github.stepprflow.*</pitest.targetClasses>
 
@@ -206,7 +204,7 @@
                 <scope>import</scope>
             </dependency>
 
-            <!-- Steppr Flow modules -->
+            <!-- Stepprflow modules -->
             <dependency>
                 <groupId>io.github.stepprflow</groupId>
                 <artifactId>stepprflow-core</artifactId>
@@ -236,7 +234,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.13.0</version>
+                    <version>3.15.0</version>
                     <configuration>
                         <source>${java.version}</source>
                         <target>${java.version}</target>
@@ -367,7 +365,7 @@
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>versions-maven-plugin</artifactId>
-                    <version>2.18.0</version>
+                    <version>2.21.0</version>
                     <configuration>
                         <generateBackupPoms>false</generateBackupPoms>
                     </configuration>
@@ -413,7 +411,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-javadoc-plugin</artifactId>
-                    <version>3.10.1</version>
+                    <version>3.12.0</version>
                     <configuration>
                         <doclint>none</doclint>
                         <quiet>true</quiet>

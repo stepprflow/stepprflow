@@ -86,7 +86,10 @@ export const useWorkflowStore = defineStore('workflow', () => {
   }
 
   async function fetchExecution(id) {
-    loading.value = true
+    // Only show loading spinner on initial load, not on polling refreshes
+    if (!currentExecution.value) {
+      loading.value = true
+    }
     error.value = null
     try {
       currentExecution.value = await executionApi.get(id)

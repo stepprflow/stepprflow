@@ -19,6 +19,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * Executes workflow steps.
@@ -115,7 +116,7 @@ public class StepExecutor {
 
         try {
             // Deserialize payload
-            Object payload = deserializePayload(message);
+            Object payload = deserializePayload(message, step);
 
             // Execute step method
             Method method = step.getMethod();
@@ -146,24 +147,29 @@ public class StepExecutor {
     }
 
     private Object deserializePayload(
-            final WorkflowMessage message) throws Exception {
+            final WorkflowMessage message,
+            final StepDefinition step) throws Exception {
         if (message.getPayload() == null) {
             return null;
         }
 
         String payloadType = message.getPayloadType();
-        if (payloadType == null) {
-            return message.getPayload();
+        if (Objects.nonNull(payloadType)) {
+            try {
+                Class<?> payloadClass = Class.forName(payloadType);
+                return objectMapper.convertValue(message.getPayload(), payloadClass);
+            } catch (ClassNotFoundException e) {
+                log.warn("Could not find payload class {}, falling back to step parameter type",
+                         payloadType);
+                // Fall back to the step method's parameter type
+                Class<?>[] paramTypes = step.getMethod().getParameterTypes();
+                if (paramTypes.length == 1) {
+                    return objectMapper.convertValue(message.getPayload(), paramTypes[0]);
+                }
+            }
         }
 
-        try {
-            Class<?> payloadClass = Class.forName(payloadType);
-            return objectMapper.convertValue(message.getPayload(), payloadClass);
-        } catch (ClassNotFoundException e) {
-            log.warn("Could not find payload class {}, using raw payload",
-                     payloadType);
-            return message.getPayload();
-        }
+        return message.getPayload();
     }
 
     private void handleCompletion(

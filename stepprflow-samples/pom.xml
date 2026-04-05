@@ -9,12 +9,12 @@
     <parent>
         <groupId>io.github.stepprflow</groupId>
         <artifactId>stepprflow-parent</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.0.0</version>
     </parent>
 
     <artifactId>stepprflow-samples</artifactId>
-    <name>Steppr Flow Samples</name>
-    <description>Sample application demonstrating Steppr Flow workflow orchestration with Kafka or RabbitMQ</description>
+    <name>Stepprflow Samples</name>
+    <description>Sample application demonstrating Stepprflow workflow orchestration with Kafka or RabbitMQ</description>
 
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
@@ -23,7 +23,7 @@
     </properties>
 
     <dependencies>
-        <!-- Steppr Flow Core -->
+        <!-- Stepprflow Core -->
         <dependency>
             <groupId>io.github.stepprflow</groupId>
             <artifactId>stepprflow-core</artifactId>
