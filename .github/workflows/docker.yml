@@ -35,7 +35,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: steppr-flow/stepprflow-monitor
+  IMAGE_NAME: stepprflow/stepprflow-monitor
 
 jobs:
   build:

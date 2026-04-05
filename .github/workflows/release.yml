@@ -139,7 +139,7 @@ jobs:
             </servers>
           </settings>
           EOF
-          mvn -B deploy -DskipTests -DaltDeploymentRepository=github::https://maven.pkg.github.com/steppr-flow/stepprflow --file pom.xml
+          mvn -B deploy -DskipTests -DaltDeploymentRepository=github::https://maven.pkg.github.com/stepprflow/stepprflow --file pom.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -222,10 +222,10 @@ jobs:
 
           ### Docker
           \`\`\`bash
-          docker pull ghcr.io/steppr-flow/stepprflow-monitor:${{ steps.new-version.outputs.version }}
+          docker pull ghcr.io/stepprflow/stepprflow-monitor:${{ steps.new-version.outputs.version }}
           \`\`\`
 
-          **Full Changelog**: https://github.com/steppr-flow/stepprflow/compare/${LAST_TAG:-HEAD~50}...v${{ steps.new-version.outputs.version }}
+          **Full Changelog**: https://github.com/stepprflow/stepprflow/compare/${LAST_TAG:-HEAD~50}...v${{ steps.new-version.outputs.version }}
           EOF
           )
 
@@ -280,7 +280,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/steppr-flow/stepprflow-monitor
+          images: ghcr.io/stepprflow/stepprflow-monitor
           tags: |
             type=raw,value=latest
             type=raw,value=${{ needs.release.outputs.version }}
