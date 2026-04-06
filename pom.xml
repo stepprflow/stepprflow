@@ -168,7 +168,7 @@
         <jacoco.version>0.8.12</jacoco.version>
 
         <!-- Lombok - aligned with Spring Boot managed version -->
-        <lombok.version>1.18.42</lombok.version>
+        <lombok.version>1.18.44</lombok.version>
 
         <!-- Checkstyle -->
         <checkstyle.version>10.21.4</checkstyle.version>
