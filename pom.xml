@@ -165,7 +165,7 @@
         <stepprflow.version>${project.version}</stepprflow.version>
 
         <!-- JaCoCo -->
-        <jacoco.version>0.8.12</jacoco.version>
+        <jacoco.version>0.8.14</jacoco.version>
 
         <!-- Lombok - aligned with Spring Boot managed version -->
         <lombok.version>1.18.42</lombok.version>
