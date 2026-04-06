@@ -171,7 +171,7 @@
         <lombok.version>1.18.42</lombok.version>
 
         <!-- Checkstyle -->
-        <checkstyle.version>10.21.4</checkstyle.version>
+        <checkstyle.version>13.4.0</checkstyle.version>
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
 
         <!-- Pitest (mutation testing) -->
