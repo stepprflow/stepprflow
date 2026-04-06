@@ -19,7 +19,7 @@
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
         <gatling.version>3.14.9</gatling.version>
-        <gatling-maven-plugin.version>4.9.6</gatling-maven-plugin.version>
+        <gatling-maven-plugin.version>4.21.5</gatling-maven-plugin.version>
     </properties>
 
     <dependencies>
