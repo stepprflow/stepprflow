@@ -90,6 +90,21 @@ public class OrderWorkflow {
 }
 ```
 
+## Topic isolation
+
+By default, all consumers using the same Kafka cluster subscribe to **all**
+workflow topics (`topicPattern=".*"`). The listener filters out messages on
+topics not registered locally via `@Topic` — they are silently acknowledged
+and dropped. This prevents:
+
+- log pollution from foreign workflow messages
+- side-effects (Spring event publish, StepExecutor.execute) on workflows
+  that don't belong to this service
+
+To further restrict at the broker subscription level (optional optimization),
+set `stepprflow.kafka.topic-pattern` to a regex matching only your service's
+topics in `application.yml`.
+
 ## Docker Compose
 
 ```yaml

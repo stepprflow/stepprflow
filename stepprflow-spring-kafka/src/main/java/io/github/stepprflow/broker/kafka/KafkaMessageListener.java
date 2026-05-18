@@ -41,6 +41,19 @@ public class KafkaMessageListener {
             return;
         }
 
+        // Skip topics not registered as workflows in this service.
+        // Without this guard, the default topicPattern=".*" makes every consumer
+        // receive ALL workflow messages on the cluster, polluting logs and
+        // triggering side-effects (eventPublisher + StepExecutor.execute) on
+        // messages destined for other services.
+        if (!registry.getTopics().contains(record.topic())) {
+            if (log.isDebugEnabled()) {
+                log.debug("Ignoring message on unregistered topic: {}", record.topic());
+            }
+            ack.acknowledge();
+            return;
+        }
+
         WorkflowMessage message = record.value();
 
         if (message == null) {
