@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.kafka.support.Acknowledgment;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -41,6 +42,8 @@ class KafkaMessageListenerTest {
     @BeforeEach
     void setUp() {
         listener = new KafkaMessageListener(stepExecutor, registry, eventPublisher);
+        // Default: the local registry knows about "test-topic"
+        when(registry.getTopics()).thenReturn(List.of("test-topic"));
     }
 
     @Nested
@@ -166,6 +169,42 @@ class KafkaMessageListenerTest {
             // Then
             verify(stepExecutor).execute(message);
             verify(acknowledgment, never()).acknowledge();
+        }
+
+        @Test
+        @DisplayName("Should process message when topic is registered locally")
+        void onMessage_withRegisteredTopic_processesMessage() {
+            // Given
+            WorkflowMessage message = createMessage(WorkflowStatus.PENDING);
+            ConsumerRecord<String, WorkflowMessage> record = createRecord(message);
+            // "test-topic" is already stubbed as known in setUp()
+
+            // When
+            listener.onMessage(record, acknowledgment);
+
+            // Then
+            verify(stepExecutor).execute(message);
+            verify(eventPublisher).publishEvent(any());
+            verify(acknowledgment).acknowledge();
+        }
+
+        @Test
+        @DisplayName("Should silently acknowledge and skip message on unregistered topic")
+        void onMessage_withUnregisteredTopic_acknowledgesAndSkips() {
+            // Given — simulate a foreign topic (e.g. produced by cockpit-svc-sales)
+            when(registry.getTopics()).thenReturn(List.of("known-topic"));
+            WorkflowMessage message = createMessage(WorkflowStatus.PENDING);
+            ConsumerRecord<String, WorkflowMessage> record = new ConsumerRecord<>(
+                    "invoice-creation", 0, 0L, message.getExecutionId(), message
+            );
+
+            // When
+            listener.onMessage(record, acknowledgment);
+
+            // Then — no side-effects, just silent ack
+            verify(stepExecutor, never()).execute(any());
+            verify(eventPublisher, never()).publishEvent(any());
+            verify(acknowledgment).acknowledge();
         }
     }
 
