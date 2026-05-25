@@ -153,7 +153,7 @@
         <spring-boot.version>3.5.8</spring-boot.version>
 
         <!-- Testcontainers -->
-        <testcontainers.version>2.0.3</testcontainers.version>
+        <testcontainers.version>2.0.5</testcontainers.version>
 
         <!-- Resilience4j -->
         <resilience4j.version>2.2.0</resilience4j.version>
