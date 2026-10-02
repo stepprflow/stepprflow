@@ -2,9 +2,17 @@
   <Teleport to="body">
     <Transition name="modal">
       <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="fixed inset-0 bg-black/40" @click="$emit('cancel')" />
-        <div class="relative z-10 w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl">
-          <h3 class="text-lg font-semibold text-gray-900">Change Reason</h3>
+        <div class="fixed inset-0 bg-black/40" @click="!loading && $emit('cancel')" />
+        <div
+          ref="dialogRef"
+          class="relative z-10 w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="titleId"
+          @keydown.esc="!loading && $emit('cancel')"
+          @keydown.tab="onTabKey"
+        >
+          <h3 :id="titleId" class="text-lg font-semibold text-gray-900">Change Reason</h3>
           <p class="mt-1 text-sm text-gray-500">Provide a reason for this payload change.</p>
 
           <!-- Change summary -->
@@ -31,18 +39,19 @@
             v-model="reason"
             class="input mt-4 min-h-[80px] resize-y"
             placeholder="Why are you making this change?"
+            :disabled="loading"
             @keydown.meta.enter="submit"
             @keydown.ctrl.enter="submit"
           />
 
           <div class="mt-4 flex gap-3">
-            <button class="btn-secondary flex-1" @click="$emit('cancel')">Cancel</button>
+            <button class="btn-secondary flex-1" :disabled="loading" @click="$emit('cancel')">Cancel</button>
             <button
               class="btn-primary flex-1"
-              :disabled="!reason.trim()"
+              :disabled="!reason.trim() || loading"
               @click="submit"
             >
-              Apply Change
+              {{ loading ? 'Applying…' : 'Apply Change' }}
             </button>
           </div>
         </div>
@@ -52,24 +61,30 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch } from 'vue'
+import { useModalFocusTrap } from '@/composables/useModalFocusTrap.js'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
   fieldPath: { type: String, default: '' },
   oldValue: { default: null },
-  newValue: { default: null }
+  newValue: { default: null },
+  // Disables inputs/actions while the confirmed change is being submitted.
+  loading: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['confirm', 'cancel'])
 
 const reason = ref('')
 const reasonInput = ref(null)
+const dialogRef = ref(null)
+const titleId = `change-reason-modal-title-${Math.random().toString(36).slice(2, 9)}`
+
+const { onTabKey } = useModalFocusTrap(() => props.show, dialogRef, reasonInput)
 
 watch(() => props.show, (val) => {
   if (val) {
     reason.value = ''
-    nextTick(() => reasonInput.value?.focus())
   }
 })
 
@@ -80,7 +95,7 @@ function formatValue(val) {
 }
 
 function submit() {
-  if (reason.value.trim()) {
+  if (reason.value.trim() && !props.loading) {
     emit('confirm', reason.value.trim())
   }
 }
