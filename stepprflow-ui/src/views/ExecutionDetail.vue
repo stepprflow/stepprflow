@@ -3,6 +3,17 @@
     <div class="text-sm text-gray-400">Loading execution...</div>
   </div>
 
+  <div v-else-if="!exec && store.error" class="flex items-center justify-center py-20">
+    <div class="max-w-md text-center">
+      <p class="text-lg font-medium text-gray-900">Unable to load execution</p>
+      <p class="mt-2 text-sm text-gray-500">{{ store.error }}</p>
+      <div class="mt-4 flex items-center justify-center gap-4">
+        <button type="button" class="btn-secondary btn-sm" @click="retry">Retry</button>
+        <router-link to="/executions" class="text-sm text-primary-600 hover:underline">Back to executions</router-link>
+      </div>
+    </div>
+  </div>
+
   <div v-else-if="!exec" class="flex items-center justify-center py-20">
     <div class="text-center">
       <p class="text-lg font-medium text-gray-900">Execution not found</p>
@@ -216,6 +227,7 @@
       :message="confirmModal.message"
       :type="confirmModal.type"
       :confirm-label="confirmModal.confirmLabel"
+      :loading="confirmModal.loading"
       @confirm="confirmModal.onConfirm"
       @cancel="confirmModal.show = false"
     />
@@ -225,6 +237,7 @@
       :field-path="changeModal.fieldPath"
       :old-value="changeModal.oldValue"
       :new-value="changeModal.newValue"
+      :loading="changeModal.loading"
       @confirm="onChangeConfirmed"
       @cancel="changeModal.show = false"
     />
@@ -235,6 +248,7 @@
 import { computed, reactive, onMounted, onUnmounted } from 'vue'
 import { format } from 'date-fns'
 import { useWorkflowStore } from '@/stores/workflow.js'
+import { useToastStore } from '@/stores/toast.js'
 import StatusBadge from '@/components/StatusBadge.vue'
 import PayloadEditor from '@/components/PayloadEditor.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
@@ -245,6 +259,7 @@ const props = defineProps({
 })
 
 const store = useWorkflowStore()
+const toast = useToastStore()
 const exec = computed(() => store.currentExecution)
 
 const circumference = 2 * Math.PI * 52
@@ -259,11 +274,11 @@ const hasPayloadChanges = computed(() => {
 })
 
 const confirmModal = reactive({
-  show: false, title: '', message: '', type: 'warning', confirmLabel: 'Confirm', onConfirm: () => {}
+  show: false, title: '', message: '', type: 'warning', confirmLabel: 'Confirm', loading: false, onConfirm: () => {}
 })
 
 const changeModal = reactive({
-  show: false, fieldPath: '', oldValue: null, newValue: null
+  show: false, fieldPath: '', oldValue: null, newValue: null, loading: false
 })
 
 function formatDate(d) {
@@ -285,8 +300,16 @@ function confirmAction(action) {
     confirmModal.type = 'info'
     confirmModal.confirmLabel = 'Resume'
     confirmModal.onConfirm = async () => {
-      confirmModal.show = false
-      await store.resumeExecution(exec.value.executionId)
+      confirmModal.loading = true
+      const ok = await store.resumeExecution(exec.value.executionId)
+      confirmModal.loading = false
+      // Only close the modal once we know the action actually succeeded.
+      // On failure, keep it open: the global toast (bound to store.error)
+      // already surfaces the API error (403/409/500...) to the user.
+      if (ok) {
+        confirmModal.show = false
+        toast.push('success', 'Execution resumed successfully.')
+      }
     }
   } else {
     confirmModal.title = 'Cancel Execution'
@@ -294,8 +317,13 @@ function confirmAction(action) {
     confirmModal.type = 'danger'
     confirmModal.confirmLabel = 'Cancel Execution'
     confirmModal.onConfirm = async () => {
-      confirmModal.show = false
-      await store.cancelExecution(exec.value.executionId)
+      confirmModal.loading = true
+      const ok = await store.cancelExecution(exec.value.executionId)
+      confirmModal.loading = false
+      if (ok) {
+        confirmModal.show = false
+        toast.push('success', 'Execution cancelled.')
+      }
     }
   }
   confirmModal.show = true
@@ -307,8 +335,13 @@ function confirmRestore() {
   confirmModal.type = 'warning'
   confirmModal.confirmLabel = 'Restore'
   confirmModal.onConfirm = async () => {
-    confirmModal.show = false
-    await store.restorePayload(exec.value.executionId)
+    confirmModal.loading = true
+    const ok = await store.restorePayload(exec.value.executionId)
+    confirmModal.loading = false
+    if (ok) {
+      confirmModal.show = false
+      toast.push('success', 'Payload restored.')
+    }
   }
   confirmModal.show = true
 }
@@ -322,8 +355,17 @@ function onPayloadUpdate(path, newValue) {
 }
 
 async function onChangeConfirmed(reason) {
-  changeModal.show = false
-  await store.updatePayloadField(exec.value.executionId, changeModal.fieldPath, changeModal.newValue, reason)
+  changeModal.loading = true
+  const ok = await store.updatePayloadField(exec.value.executionId, changeModal.fieldPath, changeModal.newValue, reason)
+  changeModal.loading = false
+  if (ok) {
+    changeModal.show = false
+    toast.push('success', 'Payload field updated.')
+  }
+}
+
+function retry() {
+  store.fetchExecution(props.id)
 }
 
 function getNestedValue(obj, path) {
