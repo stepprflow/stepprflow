@@ -15,16 +15,16 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8090',
         changeOrigin: true
-      },
-      '/ws': {
-        target: 'http://localhost:8090',
-        ws: true,
-        changeOrigin: true
       }
     }
   },
   build: {
     outDir: 'dist',
     sourcemap: false
+  },
+  test: {
+    environment: 'jsdom',
+    include: ['src/**/*.test.js'],
+    globals: false
   }
 })
