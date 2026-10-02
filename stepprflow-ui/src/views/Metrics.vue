@@ -95,7 +95,7 @@
             <button
               v-if="cb.state !== 'CLOSED'"
               class="btn-secondary btn-sm"
-              @click="resetCb(cb.name)"
+              @click="confirmResetCb(cb.name)"
             >
               Reset
             </button>
@@ -140,18 +140,37 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Reset circuit breaker confirmation -->
+    <ConfirmModal
+      :show="confirmModal.show"
+      :title="confirmModal.title"
+      :message="confirmModal.message"
+      type="warning"
+      confirm-label="Reset"
+      :loading="confirmModal.loading"
+      @confirm="confirmModal.onConfirm"
+      @cancel="confirmModal.show = false"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useMetricsStore } from '@/stores/metrics.js'
+import { useToastStore } from '@/stores/toast.js'
 import StatsCard from '@/components/StatsCard.vue'
 import HealthPanel from '@/components/HealthPanel.vue'
 import OutboxPanel from '@/components/OutboxPanel.vue'
+import ConfirmModal from '@/components/ConfirmModal.vue'
 
 const metricsStore = useMetricsStore()
+const toast = useToastStore()
 const d = computed(() => metricsStore.dashboard)
+
+const confirmModal = reactive({
+  show: false, title: '', message: '', loading: false, onConfirm: () => {}
+})
 
 function formatRate(val) {
   if (val == null) return '0.0'
@@ -164,8 +183,21 @@ function cbStateClass(state) {
   return 'bg-red-100 text-red-700'
 }
 
-async function resetCb(name) {
-  await metricsStore.resetCircuitBreaker(name)
+function confirmResetCb(name) {
+  confirmModal.title = 'Reset Circuit Breaker'
+  confirmModal.message = `Reset the "${name}" circuit breaker to CLOSED and clear its counters?`
+  confirmModal.onConfirm = async () => {
+    confirmModal.loading = true
+    const ok = await metricsStore.resetCircuitBreaker(name)
+    confirmModal.loading = false
+    // Only close on confirmed success — on failure the global toast
+    // (bound to metricsStore.error) already surfaces the API error.
+    if (ok) {
+      confirmModal.show = false
+      toast.push('success', `Circuit breaker "${name}" reset.`)
+    }
+  }
+  confirmModal.show = true
 }
 
 const healthBannerClass = computed(() => {
