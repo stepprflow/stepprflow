@@ -14,6 +14,7 @@ than editing history.
 - [ADR-0003](0003-security-context-propagation-signing.md) — Security context propagation & signing
 - [ADR-0004](0004-monitor-dual-mode-authentication.md) — Monitor dual-mode authentication
 - [ADR-0005](0005-idempotency-deduplication.md) — Idempotency / de-duplication
+- [ADR-0006](0006-spi-extension-points-and-contracts.md) — SPI extension points & contracts
 
 ## Adding a new ADR
 

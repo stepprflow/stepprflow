@@ -79,6 +79,13 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- SF-15: Prometheus registry so the already-exposed /actuator/prometheus
+             endpoint actually publishes the Micrometer workflow meters for scraping. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <!-- Kafka broker (provides MessageBroker + KafkaTemplate) -->
         <dependency>
             <groupId>io.github.stepprflow</groupId>
