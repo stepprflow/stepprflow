@@ -208,16 +208,22 @@ jobs:
             "$IMAGE"
 
           # Poll /actuator/health until UP (startup + Mongo + Kafka), up to ~150s.
+          # Gate on the HTTP status, not a substring: /actuator/health returns 200
+          # only when the TOP-LEVEL status is UP and 503 when any component
+          # (e.g. Mongo) is DOWN. Grepping for '"status":"UP"' would match a
+          # healthy sub-component while the overall status is DOWN — a false pass.
           ok=""
           for i in $(seq 1 30); do
-            body=$(curl -s http://localhost:8090/actuator/health || true)
-            echo "attempt $i: $body"
-            if echo "$body" | grep -q '"status":"UP"'; then ok=1; break; fi
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8090/actuator/health || true)
+            echo "attempt $i: health HTTP $code"
+            if [ "$code" = "200" ]; then ok=1; break; fi
             sleep 5
           done
 
           if [ -z "$ok" ]; then
-            echo "::error::monitor health never reached UP"
+            echo "::error::monitor health never reached UP (HTTP 200)"
+            curl -s http://localhost:8090/actuator/health || true
+            echo
             docker logs stepprflow-test | tail -80
             exit 1
           fi

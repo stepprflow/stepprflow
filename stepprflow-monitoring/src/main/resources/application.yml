@@ -5,10 +5,6 @@ spring:
   application:
     name: stepprflow-dashboard
 
-  data:
-    mongodb:
-      uri: ${MONGODB_URI:mongodb://localhost:27017/stepprflow}
-
 stepprflow:
   enabled: true
   broker: kafka
@@ -43,6 +39,14 @@ stepprflow:
       retries: 3
 
   monitor:
+    # MongoDB persistence for the dashboard. The monitor builds its own
+    # MongoClient from this property (NOT spring.data.mongodb.uri), so this is
+    # the knob that actually configures it. MONGODB_URI is accepted as a
+    # convenience alias; the full property name
+    # (STEPPRFLOW_MONITOR_MONGODB_URI) wins when both are set.
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/stepprflow}
+      database: ${MONGODB_DATABASE:stepprflow}
     retry:
       enabled: true
       poll-interval: 30s
