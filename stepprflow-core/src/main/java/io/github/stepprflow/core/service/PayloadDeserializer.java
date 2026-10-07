@@ -2,6 +2,7 @@ package io.github.stepprflow.core.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.stepprflow.core.model.WorkflowMessage;
+import io.github.stepprflow.core.security.TrustedClassResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -16,6 +17,9 @@ public class PayloadDeserializer {
 
     /** The JSON object mapper. */
     private final ObjectMapper objectMapper;
+
+    /** Resolves a payloadType to a class only if its package is trusted. */
+    private final TrustedClassResolver trustedClassResolver;
 
     /**
      * Deserialize the payload from a workflow message to its original type.
@@ -35,7 +39,11 @@ public class PayloadDeserializer {
         }
 
         try {
-            Class<?> payloadClass = Class.forName(payloadType);
+            // SECURITY: only resolves the class if its package is trusted;
+            // an untrusted payloadType throws UntrustedPayloadTypeException,
+            // which is NOT caught here and propagates to the caller.
+            Class<?> payloadClass =
+                    trustedClassResolver.loadTrustedClass(payloadType);
             return objectMapper.convertValue(message.getPayload(), payloadClass);
         } catch (ClassNotFoundException e) {
             log.warn("Could not find payload class {}, using raw payload",

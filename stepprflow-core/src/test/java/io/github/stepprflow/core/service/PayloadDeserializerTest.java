@@ -1,16 +1,21 @@
 package io.github.stepprflow.core.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.stepprflow.core.StepprFlowProperties;
 import io.github.stepprflow.core.model.WorkflowMessage;
+import io.github.stepprflow.core.security.TrustedClassResolver;
+import io.github.stepprflow.core.security.UntrustedPayloadTypeException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("PayloadDeserializer Tests")
 class PayloadDeserializerTest {
@@ -21,7 +26,14 @@ class PayloadDeserializerTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        deserializer = new PayloadDeserializer(objectMapper);
+        StepprFlowProperties props = new StepprFlowProperties();
+        // Trust the core model + this test's own package (for the POJO case).
+        // Simple JDK types (String/Integer/Map) come from the resolver's baseline.
+        props.setTrustedPackages(List.of(
+                "io.github.stepprflow.core.model",
+                "io.github.stepprflow.core.service"));
+        TrustedClassResolver resolver = new TrustedClassResolver(props);
+        deserializer = new PayloadDeserializer(objectMapper, resolver);
     }
 
     @Nested
@@ -96,17 +108,31 @@ class PayloadDeserializerTest {
         }
 
         @Test
-        @DisplayName("Should return raw payload when class not found")
-        void shouldReturnRawPayloadWhenClassNotFound() throws Exception {
+        @DisplayName("Should return raw payload when a TRUSTED class is not found")
+        void shouldReturnRawPayloadWhenTrustedClassNotFound() throws Exception {
             Map<String, Object> payload = Map.of("key", "value");
             WorkflowMessage message = WorkflowMessage.builder()
                     .payload(payload)
-                    .payloadType("com.nonexistent.UnknownClass")
+                    // trusted package, but the class does not exist -> CNF -> raw
+                    .payloadType("io.github.stepprflow.core.model.NoSuchPayload")
                     .build();
 
             Object result = deserializer.deserialize(message);
 
             assertThat(result).isEqualTo(payload);
+        }
+
+        @Test
+        @DisplayName("Should reject an untrusted payloadType (SF-2)")
+        void shouldRejectUntrustedPayloadType() {
+            Map<String, Object> payload = Map.of("key", "value");
+            WorkflowMessage message = WorkflowMessage.builder()
+                    .payload(payload)
+                    .payloadType("com.evil.Gadget")
+                    .build();
+
+            assertThatThrownBy(() -> deserializer.deserialize(message))
+                    .isInstanceOf(UntrustedPayloadTypeException.class);
         }
 
         @Test
