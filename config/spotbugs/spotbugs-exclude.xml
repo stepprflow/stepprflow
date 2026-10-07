@@ -131,6 +131,16 @@
         </Or>
     </Match>
 
+    <!-- Idempotency stores hold an injected StringRedisTemplate (a Spring
+         bean), not externally mutable state — same pattern as the brokers. -->
+    <Match>
+        <Class name="~io\.github\.stepprflow\.idempotency\.redis\..*"/>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
     <!--
         =====================================================================
         DATA TRANSFER OBJECTS AND MODELS
