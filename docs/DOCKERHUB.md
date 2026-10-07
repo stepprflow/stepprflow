@@ -19,8 +19,10 @@ libraries on [Maven Central](https://central.sonatype.com/artifact/io.github.ste
 
 | Tag | Notes |
 |-----|-------|
-| `1.1.0` (each `X.Y.Z`) | Exact, immutable release version |
-| `latest` | Most recent release |
+| `1.1.0` | The release version — one per release (`1.1.0`, then `1.2.0`, …) |
+| `latest` | Points to the most recent release |
+
+> For a reproducible deployment, pin by digest (`@sha256:…`) rather than a tag.
 
 **Architectures:** `linux/amd64`, `linux/arm64`.
 Also published to GHCR: `ghcr.io/stepprflow/stepprflow-monitor`.
