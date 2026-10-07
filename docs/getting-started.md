@@ -767,8 +767,8 @@ mvn package -pl stepprflow-monitoring -am -DskipTests
 docker build -t stepprflow-monitoring .
 docker run -d \
   -p 8090:8090 \
-  -e SPRING_DATA_MONGODB_URI=mongodb://host.docker.internal:27017/stepprflow \
-  -e SPRING_KAFKA_BOOTSTRAP_SERVERS=host.docker.internal:9092 \
+  -e MONGODB_URI=mongodb://host.docker.internal:27017/stepprflow \
+  -e KAFKA_BOOTSTRAP_SERVERS=host.docker.internal:9092 \
   stepprflow-monitoring
 ```
 

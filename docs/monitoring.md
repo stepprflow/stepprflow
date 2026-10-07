@@ -284,8 +284,8 @@ services:
     ports:
       - "8090:8090"
     environment:
-      - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017/stepprflow
-      - STEPPRFLOW_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - MONGODB_URI=mongodb://mongo:27017/stepprflow
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     depends_on:
       - mongo
       - kafka
@@ -295,7 +295,7 @@ services:
 
 ```bash
 java -jar stepprflow-monitoring.jar \
-  --spring.data.mongodb.uri=mongodb://localhost:27017/stepprflow \
+  --stepprflow.monitor.mongodb.uri=mongodb://localhost:27017/stepprflow \
   --stepprflow.kafka.bootstrap-servers=localhost:9092
 ```
 
