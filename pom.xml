@@ -13,7 +13,10 @@
 
     <name>Stepprflow</name>
     <description>Multi-broker workflow orchestration framework for Spring Boot</description>
-    <url>https://github.com/stepprflow/stepprflow</url>
+    <!-- Project homepage. inherit.append.path=false so child modules do NOT get
+         their artifactId appended (which produced 404 "Project URL" links on
+         Maven Central, e.g. .../stepprflow/stepprflow-core). -->
+    <url child.project.url.inherit.append.path="false">https://stepprflow.github.io/stepprflow/</url>
 
     <licenses>
         <license>
@@ -33,7 +36,9 @@
         </developer>
     </developers>
 
-    <scm>
+    <scm child.scm.connection.inherit.append.path="false"
+         child.scm.developerConnection.inherit.append.path="false"
+         child.scm.url.inherit.append.path="false">
         <connection>scm:git:git://github.com/stepprflow/stepprflow.git</connection>
         <developerConnection>scm:git:ssh://github.com:stepprflow/stepprflow.git</developerConnection>
         <url>https://github.com/stepprflow/stepprflow</url>
