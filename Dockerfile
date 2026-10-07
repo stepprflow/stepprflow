@@ -45,7 +45,13 @@ RUN java -Djarmode=layertools -jar app.jar extract
 # -----------------------------------------------------------------------------
 # Stage 3: Final runtime image
 # -----------------------------------------------------------------------------
-FROM eclipse-temurin:21-jre-alpine@sha256:51ab5e3302e7141ce665ca3ea85e8b5cd648eafbc3c0c90dd79d6537684e4555
+# glibc-based (Ubuntu), NOT Alpine: the Kafka producer uses snappy compression
+# (KafkaBrokerAutoConfiguration), whose native library (libsnappyjava.so) is a
+# glibc build and fails to load on Alpine's musl with
+# "Error loading shared library ld-linux-x86-64.so.2". On Alpine amd64 this
+# breaks every producer and prevents the dashboard from decompressing workflow
+# messages. See the Alpine/snappy incident; the fix is a glibc base.
+FROM eclipse-temurin:21-jre
 
 LABEL maintainer="Ali M'HIN <alimhin@gmail.com>"
 LABEL description="Steppr Flow Monitoring Dashboard"
@@ -56,9 +62,14 @@ LABEL org.opencontainers.image.vendor="Steppr Flow"
 
 WORKDIR /app
 
+# curl for the container HEALTHCHECK (Ubuntu base ships neither curl nor wget).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user for security
-RUN addgroup -g 1000 stepprflow && \
-    adduser -u 1000 -G stepprflow -s /bin/sh -D stepprflow
+RUN groupadd -g 1000 stepprflow && \
+    useradd -u 1000 -g stepprflow -s /bin/sh -m stepprflow
 
 # Copy layers in order of change frequency (less frequent first)
 COPY --from=layers /app/dependencies/ ./
@@ -76,7 +87,7 @@ EXPOSE 8090
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8090/actuator/health || exit 1
+    CMD curl -fsS http://localhost:8090/actuator/health || exit 1
 
 # JVM options for containers
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -Djava.security.egd=file:/dev/./urandom"

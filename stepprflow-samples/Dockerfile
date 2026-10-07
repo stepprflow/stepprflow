@@ -41,11 +41,13 @@ RUN mvn -Pfull clean package -pl stepprflow-samples -am -DskipTests -q
 # -----------------------------------------------------------------------------
 # Stage 2: runtime
 # -----------------------------------------------------------------------------
-FROM eclipse-temurin:21-jre-alpine
+# glibc-based (NOT Alpine): the Kafka producer uses snappy compression, whose
+# native lib is a glibc build and fails to load on Alpine's musl.
+FROM eclipse-temurin:21-jre
 
 WORKDIR /app
-RUN addgroup -g 1000 stepprflow && \
-    adduser -u 1000 -G stepprflow -s /bin/sh -D stepprflow
+RUN groupadd -g 1000 stepprflow && \
+    useradd -u 1000 -g stepprflow -s /bin/sh -m stepprflow
 
 COPY --from=builder /app/stepprflow-samples/target/stepprflow-samples-*.jar app.jar
 RUN chown -R stepprflow:stepprflow /app
