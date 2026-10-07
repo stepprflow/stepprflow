@@ -60,14 +60,44 @@ Then open **http://localhost:8090** (dashboard) — API under `/api`, health at
 | `MONGODB_URI` | `mongodb://localhost:27017/stepprflow` | MongoDB connection string |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka bootstrap servers |
 | `STEPPRFLOW_MONITOR_AUTH_MODE` | *(unset → denies all)* | `basic` or `oidc` |
-| `STEPPRFLOW_MONITOR_AUTH_BASIC_USERNAME` | `admin` | Local user (basic mode) |
-| `STEPPRFLOW_MONITOR_AUTH_BASIC_PASSWORD` | — | bcrypt hash (`{bcrypt}$2a$…`) or plaintext (basic mode) |
-| `STEPPRFLOW_MONITOR_AUTH_BASIC_ROLE` | — | `OPERATOR` (can mutate) or `VIEWER` (read-only) |
 | `JAVA_OPTS` | container-aware G1 defaults | JVM options |
 
-For **OIDC** (SSO via Keycloak/OIDC) set `STEPPRFLOW_MONITOR_AUTH_MODE=oidc` plus
-`spring.security.oauth2.client.*` / `issuer-uri`. See the
-[security guide](https://github.com/stepprflow/stepprflow/blob/main/docs/security.md)
+### Authentication
+
+Fail-closed: pick **one** mode per deployment. Reads require `VIEWER` or
+`OPERATOR`; mutations require `OPERATOR`.
+
+**Basic** — a local user:
+
+| Env var | Default | Description |
+|---------|---------|-------------|
+| `STEPPRFLOW_MONITOR_AUTH_BASIC_USERNAME` | `admin` | Local user |
+| `STEPPRFLOW_MONITOR_AUTH_BASIC_PASSWORD` | — | bcrypt hash (`{bcrypt}$2a$…`) or plaintext |
+| `STEPPRFLOW_MONITOR_AUTH_BASIC_ROLE` | — | `OPERATOR` or `VIEWER` |
+
+**OIDC** — SSO via Keycloak or any OIDC provider:
+
+| Env var | Default | Description |
+|---------|---------|-------------|
+| `SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_KEYCLOAK_ISSUER_URI` | — | OIDC issuer URL |
+| `SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_CLIENT_ID` | — | OAuth2 client id |
+| `SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_CLIENT_SECRET` | — | OAuth2 client secret |
+| `STEPPRFLOW_MONITOR_AUTH_OIDC_ROLES_CLAIM` | `roles` | Token claim holding the caller's roles |
+| `STEPPRFLOW_MONITOR_AUTH_OIDC_OPERATOR_ROLE` | `stepprflow-operator` | OIDC role mapped to OPERATOR |
+| `STEPPRFLOW_MONITOR_AUTH_OIDC_VIEWER_ROLE` | `stepprflow-viewer` | OIDC role mapped to VIEWER |
+
+```bash
+docker run -d --name stepprflow-monitor -p 8090:8090 \
+  -e MONGODB_URI="mongodb://mongo:27017/stepprflow" \
+  -e KAFKA_BOOTSTRAP_SERVERS="kafka:9092" \
+  -e STEPPRFLOW_MONITOR_AUTH_MODE="oidc" \
+  -e SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_KEYCLOAK_ISSUER_URI="https://keycloak.example.com/realms/my-realm" \
+  -e SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_CLIENT_ID="stepprflow-monitor" \
+  -e SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_CLIENT_SECRET="your-client-secret" \
+  alimhin/stepprflow-monitor:1.1.0
+```
+
+See the [security guide](https://github.com/stepprflow/stepprflow/blob/main/docs/security.md)
 and [monitoring guide](https://github.com/stepprflow/stepprflow/blob/main/docs/monitoring.md).
 
 ---
