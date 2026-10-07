@@ -10,6 +10,8 @@ import io.github.stepprflow.core.model.WorkflowDefinition;
 import io.github.stepprflow.core.model.WorkflowMessage;
 import io.github.stepprflow.core.model.WorkflowStatus;
 import io.github.stepprflow.core.security.SecurityContextPropagator;
+import io.github.stepprflow.core.security.TrustedClassResolver;
+import io.github.stepprflow.core.security.UntrustedPayloadTypeException;
 import io.github.stepprflow.core.util.StackTraceUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -49,6 +51,9 @@ public class StepExecutor {
     /** The security context propagator. */
     private final SecurityContextPropagator securityContextPropagator;
 
+    /** Resolves a payloadType to a class only if its package is trusted. */
+    private final TrustedClassResolver trustedClassResolver;
+
     /**
      * Constructor with qualified ObjectMapper.
      *
@@ -59,6 +64,7 @@ public class StepExecutor {
      * @param backoffCalculator the backoff calculator
      * @param callbackMethodInvoker the callback method invoker
      * @param securityContextPropagator the security context propagator
+     * @param trustedClassResolver resolves a payloadType only if its package is trusted
      */
     public StepExecutor(
             final WorkflowRegistry registry,
@@ -67,7 +73,8 @@ public class StepExecutor {
             @Qualifier("stepprflowObjectMapper") final ObjectMapper objectMapper,
             final BackoffCalculator backoffCalculator,
             final CallbackMethodInvoker callbackMethodInvoker,
-            final SecurityContextPropagator securityContextPropagator) {
+            final SecurityContextPropagator securityContextPropagator,
+            final TrustedClassResolver trustedClassResolver) {
         this.registry = registry;
         this.messageBroker = messageBroker;
         this.properties = properties;
@@ -75,6 +82,7 @@ public class StepExecutor {
         this.backoffCalculator = backoffCalculator;
         this.callbackMethodInvoker = callbackMethodInvoker;
         this.securityContextPropagator = securityContextPropagator;
+        this.trustedClassResolver = trustedClassResolver;
     }
 
     /**
@@ -176,7 +184,11 @@ public class StepExecutor {
         String payloadType = message.getPayloadType();
         if (Objects.nonNull(payloadType)) {
             try {
-                Class<?> payloadClass = Class.forName(payloadType);
+                // SECURITY: rejects an untrusted payloadType (RCE guard) before
+                // any class is loaded; UntrustedPayloadTypeException propagates
+                // out and is treated as a non-retryable failure (DLQ).
+                Class<?> payloadClass =
+                        trustedClassResolver.loadTrustedClass(payloadType);
                 return objectMapper.convertValue(message.getPayload(), payloadClass);
             } catch (ClassNotFoundException e) {
                 log.warn("Could not find payload class {}, falling back to step parameter type",
@@ -306,6 +318,11 @@ public class StepExecutor {
     }
 
     private boolean isRetryable(final Throwable cause) {
+        // A rejected (untrusted) payloadType will fail identically on redelivery
+        // and must never be retried — route straight to the DLQ.
+        if (cause instanceof UntrustedPayloadTypeException) {
+            return false;
+        }
         String exceptionType = cause.getClass().getName();
         return !properties.getRetry().getNonRetryableExceptions().contains(exceptionType);
     }

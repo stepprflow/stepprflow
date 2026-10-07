@@ -5,6 +5,8 @@ import io.github.stepprflow.core.StepprFlowProperties;
 import io.github.stepprflow.core.broker.MessageBroker;
 import io.github.stepprflow.core.model.*;
 import io.github.stepprflow.core.security.SecurityContextPropagator;
+import io.github.stepprflow.core.security.TrustedClassResolver;
+import io.github.stepprflow.core.security.UntrustedPayloadTypeException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -53,6 +55,9 @@ class StepExecutorTest {
 
     @Mock
     private SecurityContextPropagator securityContextPropagator;
+
+    @Mock
+    private TrustedClassResolver trustedClassResolver;
 
     @InjectMocks
     private StepExecutor stepExecutor;
@@ -609,6 +614,52 @@ class StepExecutorTest {
             inOrder.verify(securityContextPropagator).restore("valid-jwt");
             inOrder.verify(securityContextPropagator).clear();
             assertThat(testWorkflow.step1Called).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("payloadType trust enforcement (SF-2)")
+    class PayloadTypeSecurityTests {
+
+        private StepprFlowProperties.Retry retryConfig;
+        private StepprFlowProperties.Dlq dlqConfig;
+
+        @BeforeEach
+        void setUpProps() {
+            retryConfig = new StepprFlowProperties.Retry();
+            retryConfig.setMaxAttempts(3);
+            retryConfig.setNonRetryableExceptions(List.of());
+            dlqConfig = new StepprFlowProperties.Dlq();
+            dlqConfig.setEnabled(true);
+            dlqConfig.setSuffix(".dlq");
+        }
+
+        @Test
+        @DisplayName("Should DLQ (not retry, not execute the step) when payloadType is untrusted")
+        void shouldDlqWhenPayloadTypeUntrusted() throws Exception {
+            when(properties.getRetry()).thenReturn(retryConfig);
+            when(properties.getDlq()).thenReturn(dlqConfig);
+            testMessage = testMessage.toBuilder()
+                    .payloadType("com.evil.Gadget")
+                    .build();
+
+            StepDefinition step1 = createStepDefinition(1, "step1");
+            testDefinition = createWorkflowDefinition(List.of(step1));
+            when(registry.getDefinition("test-topic")).thenReturn(testDefinition);
+
+            // The resolver rejects the attacker-controlled type before any class
+            // is loaded.
+            when(trustedClassResolver.loadTrustedClass("com.evil.Gadget"))
+                    .thenThrow(new UntrustedPayloadTypeException(
+                            "com.evil.Gadget",
+                            List.of("io.github.stepprflow.core.model")));
+
+            stepExecutor.execute(testMessage);
+
+            // Terminal, non-retryable: straight to DLQ, step never runs, no retry.
+            verify(messageBroker).send(eq("test-topic.dlq"), any(WorkflowMessage.class));
+            verify(messageBroker, never()).send(eq("test-topic.retry"), any());
+            assertThat(testWorkflow.step1Called).isFalse();
         }
     }
 

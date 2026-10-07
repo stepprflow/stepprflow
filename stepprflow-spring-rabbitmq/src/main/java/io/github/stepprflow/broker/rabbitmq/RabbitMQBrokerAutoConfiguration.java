@@ -3,13 +3,17 @@ package io.github.stepprflow.broker.rabbitmq;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.stepprflow.core.StepprFlowProperties;
 import io.github.stepprflow.core.broker.MessageBroker;
+import io.github.stepprflow.core.security.TrustedPackagesValidator;
 import io.github.stepprflow.core.service.WorkflowRegistry;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.amqp.core.AcknowledgeMode;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -52,8 +56,26 @@ public class RabbitMQBrokerAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public MessageConverter jackson2JsonMessageConverter(ObjectMapper objectMapper) {
-        return new Jackson2JsonMessageConverter(objectMapper);
+    public MessageConverter jackson2JsonMessageConverter(
+            ObjectMapper objectMapper, StepprFlowProperties properties) {
+        Jackson2JsonMessageConverter converter =
+                new Jackson2JsonMessageConverter(objectMapper);
+
+        // SECURITY: restrict the types the converter will materialize from a
+        // message's type headers to the configured trusted packages, mirroring
+        // the Kafka JsonDeserializer. Without this the converter would honor an
+        // attacker-controlled __TypeId__ and deserialize arbitrary classes (RCE).
+        List<String> trustedPackages = new ArrayList<>();
+        trustedPackages.addAll(properties.getTrustedPackages());
+        trustedPackages.addAll(properties.getRabbitmq().getTrustedPackages());
+        TrustedPackagesValidator.validate(trustedPackages);
+
+        DefaultJackson2JavaTypeMapper typeMapper =
+                new DefaultJackson2JavaTypeMapper();
+        typeMapper.setTrustedPackages(trustedPackages.toArray(new String[0]));
+        converter.setJavaTypeMapper(typeMapper);
+
+        return converter;
     }
 
     @Bean

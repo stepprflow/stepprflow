@@ -8,6 +8,7 @@ import io.github.stepprflow.core.model.WorkflowDefinition;
 import io.github.stepprflow.core.model.WorkflowMessage;
 import io.github.stepprflow.core.model.WorkflowStatus;
 import io.github.stepprflow.core.security.SecurityContextPropagator;
+import io.github.stepprflow.core.security.TrustedClassResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -51,6 +52,9 @@ class StepExecutorSecurityTest {
     @Mock
     private SecurityContextPropagator securityContextPropagator;
 
+    @Mock
+    private TrustedClassResolver trustedClassResolver;
+
     private StepExecutor stepExecutor;
 
     private WorkflowMessage testMessage;
@@ -65,7 +69,8 @@ class StepExecutorSecurityTest {
                 objectMapper,
                 backoffCalculator,
                 callbackMethodInvoker,
-                securityContextPropagator
+                securityContextPropagator,
+                trustedClassResolver
         );
 
         testWorkflow = new TestWorkflow();

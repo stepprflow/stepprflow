@@ -33,6 +33,26 @@ public class StepprFlowProperties {
     private RabbitMQ rabbitmq = new RabbitMQ();
 
     /**
+     * Broker-agnostic trusted packages for JSON payload deserialization.
+     * <p>
+     * SECURITY: this is the canonical allow-list enforced at the application
+     * layer before a message's {@code payloadType} is resolved via reflection
+     * ({@code Class.forName}). A {@code payloadType} whose class is not under one
+     * of these packages is rejected (never loaded) — this is the guard against
+     * deserialization-gadget Remote Code Execution. Never use "*".
+     * </p>
+     * <p>
+     * Add your application's payload packages here, e.g.
+     * {@code ["io.github.stepprflow.core.model", "com.mycompany.workflow.payload"]}.
+     * The per-broker {@code kafka.trusted-packages} / {@code rabbitmq.trusted-packages}
+     * are still honored (unioned in) for backward compatibility, but this
+     * broker-agnostic property is the recommended place to configure them.
+     * </p>
+     */
+    private List<String> trustedPackages =
+            List.of("io.github.stepprflow.core.model");
+
+    /**
      * Retry configuration.
      */
     private Retry retry = new Retry();
