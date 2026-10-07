@@ -236,10 +236,34 @@ jobs:
           echo "Monitor image smoke test passed."
           docker rm -f stepprflow-test
 
+  # Full end-to-end: a real producer (sample OrderWorkflow) drives the whole
+  # chain workflow -> Kafka -> monitor -> Mongo -> monitor API. Unlike the image
+  # smoke above (which only proves the monitor boots and serves), this proves an
+  # execution is actually ingested and reaches COMPLETED.
+  e2e:
+    name: End-to-End (samples)
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Build and start the e2e stack
+        run: docker compose -f docker-compose.e2e.yml up --build -d
+
+      - name: Run end-to-end smoke
+        run: bash scripts/e2e-check.sh
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.e2e.yml down -v
+
   # Update deployment (optional - triggered on release)
   notify:
     name: Notify Release
-    needs: [build, scan, test]
+    needs: [build, scan, test, e2e]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
 

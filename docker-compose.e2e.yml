@@ -1,0 +1,54 @@
+# End-to-end smoke stack: a real producer (sample OrderWorkflow) driving the
+# full chain workflow -> Kafka -> monitor -> Mongo -> monitor API. Used by the
+# `e2e` job in .github/workflows/docker.yml and runnable locally with:
+#   docker compose -f docker-compose.e2e.yml up --build -d
+services:
+  mongo:
+    image: mongo:7.0
+    tmpfs:
+      - /data/db
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+
+  monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - mongo
+      - kafka
+    ports:
+      - "8090:8090"
+    environment:
+      STEPPRFLOW_MONITOR_MONGODB_URI: mongodb://mongo:27017/stepprflow
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      STEPPRFLOW_MONITOR_AUTH_MODE: basic
+      STEPPRFLOW_MONITOR_AUTH_BASIC_USERNAME: admin
+      STEPPRFLOW_MONITOR_AUTH_BASIC_PASSWORD: admin
+      STEPPRFLOW_MONITOR_AUTH_BASIC_ROLE: OPERATOR
+
+  sample:
+    build:
+      context: .
+      dockerfile: stepprflow-samples/Dockerfile
+    depends_on:
+      - kafka
+    ports:
+      - "8010:8010"
+    environment:
+      SPRING_PROFILES_ACTIVE: kafka
+      STEPPRFLOW_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
