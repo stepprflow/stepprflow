@@ -2,8 +2,16 @@
   <Teleport to="body">
     <Transition name="modal">
       <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="fixed inset-0 bg-black/40" @click="$emit('cancel')" />
-        <div class="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+        <div class="fixed inset-0 bg-black/40" @click="!loading && $emit('cancel')" />
+        <div
+          ref="dialogRef"
+          class="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-2xl"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="titleId"
+          @keydown.esc="!loading && $emit('cancel')"
+          @keydown.tab="onTabKey"
+        >
           <!-- Icon -->
           <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full" :class="iconBg">
             <svg class="h-6 w-6" :class="iconColor" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
@@ -11,17 +19,19 @@
             </svg>
           </div>
 
-          <h3 class="text-center text-lg font-semibold text-gray-900">{{ title }}</h3>
+          <h3 :id="titleId" class="text-center text-lg font-semibold text-gray-900">{{ title }}</h3>
           <p class="mt-2 text-center text-sm text-gray-500">{{ message }}</p>
 
           <div class="mt-6 flex gap-3">
-            <button class="btn-secondary flex-1" @click="$emit('cancel')">Cancel</button>
+            <button class="btn-secondary flex-1" :disabled="loading" @click="$emit('cancel')">Cancel</button>
             <button
+              ref="confirmBtnRef"
               class="flex-1"
               :class="confirmClass"
+              :disabled="loading"
               @click="$emit('confirm')"
             >
-              {{ confirmLabel }}
+              {{ loading ? 'Please wait…' : confirmLabel }}
             </button>
           </div>
         </div>
@@ -31,17 +41,28 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useModalFocusTrap } from '@/composables/useModalFocusTrap.js'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
   title: { type: String, default: 'Confirm' },
   message: { type: String, default: 'Are you sure?' },
   type: { type: String, default: 'warning' },
-  confirmLabel: { type: String, default: 'Confirm' }
+  confirmLabel: { type: String, default: 'Confirm' },
+  // Disables the actions and shows a busy state while the confirmed
+  // action is in flight, so the modal can only close once the caller
+  // knows whether the action actually succeeded.
+  loading: { type: Boolean, default: false }
 })
 
 defineEmits(['confirm', 'cancel'])
+
+const dialogRef = ref(null)
+const confirmBtnRef = ref(null)
+const titleId = `confirm-modal-title-${Math.random().toString(36).slice(2, 9)}`
+
+const { onTabKey } = useModalFocusTrap(() => props.show, dialogRef, confirmBtnRef)
 
 const typeConfig = {
   info: {

@@ -8,11 +8,13 @@
         </transition>
       </router-view>
     </main>
+    <ToastContainer />
   </div>
 </template>
 
 <script setup>
 import Sidebar from '@/components/Sidebar.vue'
+import ToastContainer from '@/components/ToastContainer.vue'
 </script>
 
 <style>
