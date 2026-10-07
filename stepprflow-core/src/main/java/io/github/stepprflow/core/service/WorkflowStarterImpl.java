@@ -5,6 +5,7 @@ import io.github.stepprflow.core.model.WorkflowDefinition;
 import io.github.stepprflow.core.model.WorkflowMessage;
 import io.github.stepprflow.core.model.WorkflowStatus;
 import io.github.stepprflow.core.security.SecurityContextPropagator;
+import io.github.stepprflow.core.security.SecurityContextSigner;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,9 @@ public class WorkflowStarterImpl implements WorkflowStarter {
     /** The security context propagator. */
     private final SecurityContextPropagator securityContextPropagator;
 
+    /** Signs the captured security context for integrity in transit. */
+    private final SecurityContextSigner securityContextSigner;
+
     /** The service name. */
     private final String serviceName;
 
@@ -38,16 +42,19 @@ public class WorkflowStarterImpl implements WorkflowStarter {
      * @param workflowRegistry the workflow registry
      * @param broker the message broker
      * @param propagator the security context propagator
+     * @param signer signs the captured security context for integrity
      * @param appName the service name
      */
     public WorkflowStarterImpl(
             final WorkflowRegistry workflowRegistry,
             final MessageBroker broker,
             final SecurityContextPropagator propagator,
+            final SecurityContextSigner signer,
             @Value("${spring.application.name:unknown}") final String appName) {
         this.registry = workflowRegistry;
         this.messageBroker = broker;
         this.securityContextPropagator = propagator;
+        this.securityContextSigner = signer;
         this.serviceName = appName;
         log.info("WorkflowStarterImpl initialized with SecurityContextPropagator: {}",
                 propagator.getClass().getName());
@@ -67,8 +74,10 @@ public class WorkflowStarterImpl implements WorkflowStarter {
 
         String executionId = UUID.randomUUID().toString();
 
-        // Capture security context from current thread
+        // Capture security context from current thread, then sign it (bound to
+        // this execution/topic) so its integrity can be verified on restore.
         String securityContext = securityContextPropagator.capture();
+        securityContext = securityContextSigner.wrap(executionId, topic, securityContext);
         log.debug("Captured security context: {}", securityContext != null ? "present" : "null");
 
         int totalSteps = 0;
@@ -119,8 +128,10 @@ public class WorkflowStarterImpl implements WorkflowStarter {
 
         String executionId = UUID.randomUUID().toString();
 
-        // Capture security context from current thread
+        // Capture security context from current thread, then sign it (bound to
+        // this execution/topic) so its integrity can be verified on restore.
         String securityContext = securityContextPropagator.capture();
+        securityContext = securityContextSigner.wrap(executionId, topic, securityContext);
 
         int totalSteps = 0;
         String firstStepLabel = null;

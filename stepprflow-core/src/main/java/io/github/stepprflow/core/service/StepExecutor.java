@@ -9,7 +9,9 @@ import io.github.stepprflow.core.model.StepDefinition;
 import io.github.stepprflow.core.model.WorkflowDefinition;
 import io.github.stepprflow.core.model.WorkflowMessage;
 import io.github.stepprflow.core.model.WorkflowStatus;
+import io.github.stepprflow.core.security.ForgedSecurityContextException;
 import io.github.stepprflow.core.security.SecurityContextPropagator;
+import io.github.stepprflow.core.security.SecurityContextSigner;
 import io.github.stepprflow.core.security.TrustedClassResolver;
 import io.github.stepprflow.core.security.UntrustedPayloadTypeException;
 import io.github.stepprflow.core.util.StackTraceUtils;
@@ -54,6 +56,9 @@ public class StepExecutor {
     /** Resolves a payloadType to a class only if its package is trusted. */
     private final TrustedClassResolver trustedClassResolver;
 
+    /** Verifies the integrity of a propagated security context. */
+    private final SecurityContextSigner securityContextSigner;
+
     /**
      * Constructor with qualified ObjectMapper.
      *
@@ -65,6 +70,7 @@ public class StepExecutor {
      * @param callbackMethodInvoker the callback method invoker
      * @param securityContextPropagator the security context propagator
      * @param trustedClassResolver resolves a payloadType only if its package is trusted
+     * @param securityContextSigner verifies the integrity of a propagated security context
      */
     public StepExecutor(
             final WorkflowRegistry registry,
@@ -74,7 +80,8 @@ public class StepExecutor {
             final BackoffCalculator backoffCalculator,
             final CallbackMethodInvoker callbackMethodInvoker,
             final SecurityContextPropagator securityContextPropagator,
-            final TrustedClassResolver trustedClassResolver) {
+            final TrustedClassResolver trustedClassResolver,
+            final SecurityContextSigner securityContextSigner) {
         this.registry = registry;
         this.messageBroker = messageBroker;
         this.properties = properties;
@@ -83,6 +90,7 @@ public class StepExecutor {
         this.callbackMethodInvoker = callbackMethodInvoker;
         this.securityContextPropagator = securityContextPropagator;
         this.trustedClassResolver = trustedClassResolver;
+        this.securityContextSigner = securityContextSigner;
     }
 
     /**
@@ -124,8 +132,19 @@ public class StepExecutor {
                     securityContext != null ? "present" : "NULL",
                     securityContextPropagator.getClass().getSimpleName());
             if (securityContext != null) {
+                String rawContext;
                 try {
-                    securityContextPropagator.restore(securityContext);
+                    // SF-3: verify the HMAC envelope (bound to executionId+topic)
+                    // before restoring. A forged/tampered/replayed context is
+                    // rejected here and never reaches the propagator.
+                    rawContext = securityContextSigner.unwrapAndVerify(
+                            message.getExecutionId(), topic, securityContext);
+                } catch (Exception verifyError) {
+                    handleRestoreFailure(message, step, definition, verifyError);
+                    return;
+                }
+                try {
+                    securityContextPropagator.restore(rawContext);
                 } catch (Exception restoreError) {
                     // A restore failure (e.g. an expired/invalid propagated
                     // credential) will not succeed on redelivery — the credential
@@ -318,9 +337,11 @@ public class StepExecutor {
     }
 
     private boolean isRetryable(final Throwable cause) {
-        // A rejected (untrusted) payloadType will fail identically on redelivery
-        // and must never be retried — route straight to the DLQ.
-        if (cause instanceof UntrustedPayloadTypeException) {
+        // A rejected (untrusted) payloadType or a forged/tampered security
+        // context will fail identically on redelivery and must never be
+        // retried — route straight to the DLQ.
+        if (cause instanceof UntrustedPayloadTypeException
+                || cause instanceof ForgedSecurityContextException) {
             return false;
         }
         String exceptionType = cause.getClass().getName();
