@@ -1,9 +1,28 @@
 import axios from 'axios'
 
+// Session-based auth (cookie JSESSIONID), CSRF double-submit cookie.
+// The backend sets a non-HttpOnly `XSRF-TOKEN` cookie; axios mirrors it
+// back into the `X-XSRF-TOKEN` header on every mutating request. All of
+// this only works with credentials (cookies) sent on same-origin XHR.
+const csrfConfig = {
+  withCredentials: true,
+  withXSRFToken: true,
+  xsrfCookieName: 'XSRF-TOKEN',
+  xsrfHeaderName: 'X-XSRF-TOKEN'
+}
+
 const api = axios.create({
   baseURL: '/api',
   timeout: 10000,
-  headers: { 'Content-Type': 'application/json' }
+  headers: { 'Content-Type': 'application/json' },
+  ...csrfConfig
+})
+
+// Form login / logout live at the servlet root (`/login`, `/logout`), not
+// under `/api`, so they need their own client with an empty baseURL.
+const rootClient = axios.create({
+  timeout: 10000,
+  ...csrfConfig
 })
 
 export class ApiError extends Error {
@@ -32,21 +51,57 @@ export class ApiError extends Error {
   }
 }
 
-api.interceptors.response.use(
-  response => response,
-  error => {
-    if (error.response) {
-      const { status, data } = error.response
-      const message = data?.message || data?.error || error.message
-      const code = data?.code || `HTTP_${status}`
-      throw new ApiError(message, status, code, data)
+async function handleError(error) {
+  if (error.response) {
+    const { status, data } = error.response
+    const message = data?.message || data?.error || error.message
+    const code = data?.code || `HTTP_${status}`
+
+    // 401: session missing/expired. Unless the caller opted out
+    // (the auth probe `/auth/me` and the login attempt expect it), kick
+    // the user back to the login screen via the auth store.
+    if (status === 401 && !error.config?.skipAuthRedirect) {
+      const { useAuthStore } = await import('@/stores/auth.js')
+      useAuthStore().handleUnauthorized()
     }
-    if (error.request) {
-      throw new ApiError('Network error — unable to reach the server', 0, 'NETWORK_ERROR')
+
+    // 403: authenticated but lacking OPERATOR. The action is simply not
+    // allowed — surface it, but keep the user logged in.
+    if (status === 403) {
+      const { useToastStore } = await import('@/stores/toast.js')
+      useToastStore().push('error', 'Action réservée aux opérateurs.')
     }
-    throw new ApiError(error.message, 0, 'REQUEST_ERROR')
+
+    throw new ApiError(message, status, code, data)
   }
-)
+  if (error.request) {
+    throw new ApiError('Network error — unable to reach the server', 0, 'NETWORK_ERROR')
+  }
+  throw new ApiError(error.message, 0, 'REQUEST_ERROR')
+}
+
+api.interceptors.response.use(response => response, handleError)
+rootClient.interceptors.response.use(response => response, handleError)
+
+export const authApi = {
+  // Public — tells the UI which login screen to render.
+  getConfig: () => api.get('/auth/config', { skipAuthRedirect: true }).then(r => r.data),
+
+  // Authenticated probe. 401 is an expected answer (not logged in), so it
+  // opts out of the global redirect; callers interpret the 401 themselves.
+  getMe: () => api.get('/auth/me', { skipAuthRedirect: true }).then(r => r.data),
+
+  // Spring form login — form-urlencoded. A bad password does not necessarily
+  // come back as 401 (default Spring redirects to /login?error), so callers
+  // must confirm success with a follow-up getMe() rather than trusting this.
+  loginBasic: (username, password) =>
+    rootClient.post('/login', new URLSearchParams({ username, password }), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      skipAuthRedirect: true
+    }),
+
+  logout: () => rootClient.post('/logout')
+}
 
 export const dashboardApi = {
   getOverview: () => api.get('/dashboard/overview').then(r => r.data),

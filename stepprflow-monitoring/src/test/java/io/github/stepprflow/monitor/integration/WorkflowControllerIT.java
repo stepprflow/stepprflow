@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -26,12 +27,14 @@ import java.util.stream.IntStream;
 
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(classes = TestApplication.class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers
+@WithMockUser(authorities = {"OPERATOR"})
 @DisplayName("Workflow Controller Integration Tests")
 class WorkflowControllerIT extends MongoDBTestContainerConfig {
 
@@ -314,7 +317,7 @@ class WorkflowControllerIT extends MongoDBTestContainerConfig {
             repository.save(execution);
 
             // When & Then
-            mockMvc.perform(post("/api/workflows/{executionId}/resume", executionId))
+            mockMvc.perform(post("/api/workflows/{executionId}/resume", executionId).with(csrf()))
                     .andExpect(status().isAccepted());
         }
 
@@ -329,7 +332,8 @@ class WorkflowControllerIT extends MongoDBTestContainerConfig {
 
             // When & Then
             mockMvc.perform(post("/api/workflows/{executionId}/resume", executionId)
-                            .param("fromStep", "1"))
+                            .param("fromStep", "1")
+                            .with(csrf()))
                     .andExpect(status().isAccepted());
         }
 
@@ -340,7 +344,7 @@ class WorkflowControllerIT extends MongoDBTestContainerConfig {
             var unknownId = UUID.randomUUID().toString();
 
             // When & Then
-            mockMvc.perform(post("/api/workflows/{executionId}/resume", unknownId))
+            mockMvc.perform(post("/api/workflows/{executionId}/resume", unknownId).with(csrf()))
                     .andExpect(status().is4xxClientError());
         }
     }
@@ -358,7 +362,7 @@ class WorkflowControllerIT extends MongoDBTestContainerConfig {
             repository.save(execution);
 
             // When & Then
-            mockMvc.perform(delete("/api/workflows/{executionId}", executionId))
+            mockMvc.perform(delete("/api/workflows/{executionId}", executionId).with(csrf()))
                     .andExpect(status().isNoContent());
 
             // Verify
@@ -375,7 +379,7 @@ class WorkflowControllerIT extends MongoDBTestContainerConfig {
             repository.save(execution);
 
             // When & Then
-            mockMvc.perform(delete("/api/workflows/{executionId}", executionId))
+            mockMvc.perform(delete("/api/workflows/{executionId}", executionId).with(csrf()))
                     .andExpect(status().is4xxClientError());
         }
 
@@ -386,7 +390,7 @@ class WorkflowControllerIT extends MongoDBTestContainerConfig {
             var unknownId = UUID.randomUUID().toString();
 
             // When & Then
-            mockMvc.perform(delete("/api/workflows/{executionId}", unknownId))
+            mockMvc.perform(delete("/api/workflows/{executionId}", unknownId).with(csrf()))
                     .andExpect(status().is4xxClientError());
         }
     }

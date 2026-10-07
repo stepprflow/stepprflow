@@ -95,6 +95,8 @@
             <button
               v-if="cb.state !== 'CLOSED'"
               class="btn-secondary btn-sm"
+              :disabled="!auth.isOperator"
+              :title="auth.isOperator ? '' : operatorOnlyTitle"
               @click="confirmResetCb(cb.name)"
             >
               Reset
@@ -159,6 +161,7 @@
 import { computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useMetricsStore } from '@/stores/metrics.js'
 import { useToastStore } from '@/stores/toast.js'
+import { useAuthStore } from '@/stores/auth.js'
 import StatsCard from '@/components/StatsCard.vue'
 import HealthPanel from '@/components/HealthPanel.vue'
 import OutboxPanel from '@/components/OutboxPanel.vue'
@@ -166,7 +169,9 @@ import ConfirmModal from '@/components/ConfirmModal.vue'
 
 const metricsStore = useMetricsStore()
 const toast = useToastStore()
+const auth = useAuthStore()
 const d = computed(() => metricsStore.dashboard)
+const operatorOnlyTitle = 'Action réservée aux opérateurs'
 
 const confirmModal = reactive({
   show: false, title: '', message: '', loading: false, onConfirm: () => {}

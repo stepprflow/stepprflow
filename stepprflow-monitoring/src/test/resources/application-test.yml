@@ -15,6 +15,14 @@ stepprflow:
       completed-ttl: PT1H
       failed-ttl: PT24H
     recent-limit: 10
+    # SF-5: tests run in basic mode; @WithMockUser supplies the authorities, so
+    # the password is only needed to satisfy the basic-mode user bean.
+    auth:
+      mode: basic
+      basic:
+        username: test-admin
+        password: "{noop}test-password"
+        role: OPERATOR
 
 logging:
   level:

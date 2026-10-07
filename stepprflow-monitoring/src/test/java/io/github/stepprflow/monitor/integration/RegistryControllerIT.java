@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -17,12 +19,15 @@ import java.util.HashSet;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(classes = TestApplication.class)
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 @Testcontainers
+@WithMockUser(authorities = {"OPERATOR"})
 @DisplayName("Registry Controller Integration Tests")
 class RegistryControllerIT extends MongoDBTestContainerConfig {
 
@@ -53,7 +58,7 @@ class RegistryControllerIT extends MongoDBTestContainerConfig {
                     .updatedAt(Instant.now())
                     .build());
 
-            mockMvc.perform(delete("/api/registry/workflows/{id}", workflow.getId()))
+            mockMvc.perform(delete("/api/registry/workflows/{id}", workflow.getId()).with(csrf()))
                     .andExpect(status().isNoContent());
 
             assertThat(repository.findById(workflow.getId())).isEmpty();
@@ -71,7 +76,7 @@ class RegistryControllerIT extends MongoDBTestContainerConfig {
                     .updatedAt(Instant.now())
                     .build());
 
-            mockMvc.perform(delete("/api/registry/workflows/{id}", workflow.getId()))
+            mockMvc.perform(delete("/api/registry/workflows/{id}", workflow.getId()).with(csrf()))
                     .andExpect(status().isConflict());
 
             assertThat(repository.findById(workflow.getId())).isPresent();
@@ -80,7 +85,7 @@ class RegistryControllerIT extends MongoDBTestContainerConfig {
         @Test
         @DisplayName("Should return 404 for non-existent workflow")
         void shouldReturn404ForNonExistentWorkflow() throws Exception {
-            mockMvc.perform(delete("/api/registry/workflows/{id}", "non-existent-id"))
+            mockMvc.perform(delete("/api/registry/workflows/{id}", "non-existent-id").with(csrf()))
                     .andExpect(status().isNotFound());
         }
     }
@@ -119,7 +124,7 @@ class RegistryControllerIT extends MongoDBTestContainerConfig {
                     .updatedAt(Instant.now())
                     .build());
 
-            mockMvc.perform(delete("/api/registry/workflows/inactive"))
+            mockMvc.perform(delete("/api/registry/workflows/inactive").with(csrf()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.purgedCount").value(2));
 
@@ -140,7 +145,7 @@ class RegistryControllerIT extends MongoDBTestContainerConfig {
                     .updatedAt(Instant.now())
                     .build());
 
-            mockMvc.perform(delete("/api/registry/workflows/inactive"))
+            mockMvc.perform(delete("/api/registry/workflows/inactive").with(csrf()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.purgedCount").value(0));
         }

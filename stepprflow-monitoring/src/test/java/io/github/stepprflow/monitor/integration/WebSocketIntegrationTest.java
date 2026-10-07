@@ -13,8 +13,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.messaging.converter.MappingJackson2MessageConverter;
 import org.springframework.messaging.simp.stomp.*;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
 import org.springframework.web.socket.sockjs.client.SockJsClient;
@@ -44,8 +48,20 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 @SpringBootTest(classes = TestApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
+@ActiveProfiles("test")
 @DisplayName("WebSocket Integration Tests")
 class WebSocketIntegrationTest {
+
+    /** Basic-auth handshake headers matching the test-profile local user (SF-5). */
+    private final WebSocketHttpHeaders handshakeHeaders = buildHandshakeHeaders();
+
+    private static WebSocketHttpHeaders buildHandshakeHeaders() {
+        WebSocketHttpHeaders headers = new WebSocketHttpHeaders();
+        String creds = Base64.getEncoder().encodeToString(
+                "test-admin:test-password".getBytes(StandardCharsets.UTF_8));
+        headers.add("Authorization", "Basic " + creds);
+        return headers;
+    }
 
     private static final long SUBSCRIPTION_WAIT_MS = 500;
 
@@ -92,7 +108,7 @@ class WebSocketIntegrationTest {
         @Test
         @DisplayName("Should connect to WebSocket endpoint")
         void shouldConnectToWebSocketEndpoint() throws Exception {
-            var session = stompClient.connectAsync(wsUrl, new TestStompSessionHandler())
+            var session = stompClient.connectAsync(wsUrl, handshakeHeaders, new TestStompSessionHandler())
                     .get(5, TimeUnit.SECONDS);
 
             assertThat(session).isNotNull();
@@ -106,7 +122,7 @@ class WebSocketIntegrationTest {
         void shouldSubscribeToUpdatesTopic() throws Exception {
             var messageQueue = new LinkedBlockingQueue<WorkflowUpdateDTO>();
 
-            var session = stompClient.connectAsync(wsUrl, new TestStompSessionHandler())
+            var session = stompClient.connectAsync(wsUrl, handshakeHeaders, new TestStompSessionHandler())
                     .get(5, TimeUnit.SECONDS);
 
             session.subscribe("/topic/workflow/updates", new TestStompFrameHandler(messageQueue));
@@ -127,7 +143,7 @@ class WebSocketIntegrationTest {
             assumeTrue(broadcaster != null, "WebSocketHandler not available");
 
             var messageQueue = new LinkedBlockingQueue<WorkflowUpdateDTO>();
-            var session = stompClient.connectAsync(wsUrl, new TestStompSessionHandler())
+            var session = stompClient.connectAsync(wsUrl, handshakeHeaders, new TestStompSessionHandler())
                     .get(5, TimeUnit.SECONDS);
             session.subscribe("/topic/workflow/updates", new TestStompFrameHandler(messageQueue));
             Thread.sleep(SUBSCRIPTION_WAIT_MS);
@@ -160,7 +176,7 @@ class WebSocketIntegrationTest {
             assumeTrue(broadcaster != null, "WebSocketHandler not available");
 
             var messageQueue = new LinkedBlockingQueue<WorkflowUpdateDTO>();
-            var session = stompClient.connectAsync(wsUrl, new TestStompSessionHandler())
+            var session = stompClient.connectAsync(wsUrl, handshakeHeaders, new TestStompSessionHandler())
                     .get(5, TimeUnit.SECONDS);
             session.subscribe("/topic/workflow/payment-workflow", new TestStompFrameHandler(messageQueue));
             Thread.sleep(SUBSCRIPTION_WAIT_MS);
@@ -185,7 +201,7 @@ class WebSocketIntegrationTest {
 
             var executionId = "exec-specific-" + UUID.randomUUID();
             var messageQueue = new LinkedBlockingQueue<WorkflowUpdateDTO>();
-            var session = stompClient.connectAsync(wsUrl, new TestStompSessionHandler())
+            var session = stompClient.connectAsync(wsUrl, handshakeHeaders, new TestStompSessionHandler())
                     .get(5, TimeUnit.SECONDS);
             session.subscribe("/topic/workflow/execution/" + executionId, new TestStompFrameHandler(messageQueue));
             Thread.sleep(SUBSCRIPTION_WAIT_MS);
@@ -209,7 +225,7 @@ class WebSocketIntegrationTest {
             assumeTrue(broadcaster != null, "WebSocketHandler not available");
 
             var messageQueue = new LinkedBlockingQueue<WorkflowUpdateDTO>();
-            var session = stompClient.connectAsync(wsUrl, new TestStompSessionHandler())
+            var session = stompClient.connectAsync(wsUrl, handshakeHeaders, new TestStompSessionHandler())
                     .get(5, TimeUnit.SECONDS);
             session.subscribe("/topic/workflow/order-workflow", new TestStompFrameHandler(messageQueue));
             Thread.sleep(SUBSCRIPTION_WAIT_MS);
@@ -237,9 +253,9 @@ class WebSocketIntegrationTest {
             var messageQueue1 = new LinkedBlockingQueue<WorkflowUpdateDTO>();
             var messageQueue2 = new LinkedBlockingQueue<WorkflowUpdateDTO>();
 
-            var session1 = stompClient.connectAsync(wsUrl, new TestStompSessionHandler())
+            var session1 = stompClient.connectAsync(wsUrl, handshakeHeaders, new TestStompSessionHandler())
                     .get(5, TimeUnit.SECONDS);
-            var session2 = stompClient.connectAsync(wsUrl, new TestStompSessionHandler())
+            var session2 = stompClient.connectAsync(wsUrl, handshakeHeaders, new TestStompSessionHandler())
                     .get(5, TimeUnit.SECONDS);
             session1.subscribe("/topic/workflow/updates", new TestStompFrameHandler(messageQueue1));
             session2.subscribe("/topic/workflow/updates", new TestStompFrameHandler(messageQueue2));
@@ -271,7 +287,7 @@ class WebSocketIntegrationTest {
             var generalQueue = new LinkedBlockingQueue<WorkflowUpdateDTO>();
             var topicQueue = new LinkedBlockingQueue<WorkflowUpdateDTO>();
 
-            var session = stompClient.connectAsync(wsUrl, new TestStompSessionHandler())
+            var session = stompClient.connectAsync(wsUrl, handshakeHeaders, new TestStompSessionHandler())
                     .get(5, TimeUnit.SECONDS);
             session.subscribe("/topic/workflow/updates", new TestStompFrameHandler(generalQueue));
             session.subscribe("/topic/workflow/order-workflow", new TestStompFrameHandler(topicQueue));
@@ -303,7 +319,7 @@ class WebSocketIntegrationTest {
             assumeTrue(broadcaster != null, "WebSocketHandler not available");
 
             var messageQueue = new LinkedBlockingQueue<WorkflowUpdateDTO>();
-            var session = stompClient.connectAsync(wsUrl, new TestStompSessionHandler())
+            var session = stompClient.connectAsync(wsUrl, handshakeHeaders, new TestStompSessionHandler())
                     .get(5, TimeUnit.SECONDS);
             session.subscribe("/topic/workflow/updates", new TestStompFrameHandler(messageQueue));
             Thread.sleep(SUBSCRIPTION_WAIT_MS);
