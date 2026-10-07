@@ -12,8 +12,10 @@ on:
       - 'stepprflow-spring-rabbitmq/**'
       - 'stepprflow-monitoring/**'
       - 'stepprflow-ui/**'
+      - 'stepprflow-samples/**'
       - 'Dockerfile'
       - 'docker-compose*.yml'
+      - 'scripts/e2e-check.sh'
       - '.github/workflows/docker.yml'
   pull_request:
     branches:
@@ -24,7 +26,10 @@ on:
       - 'stepprflow-spring-rabbitmq/**'
       - 'stepprflow-monitoring/**'
       - 'stepprflow-ui/**'
+      - 'stepprflow-samples/**'
       - 'Dockerfile'
+      - 'docker-compose*.yml'
+      - 'scripts/e2e-check.sh'
   workflow_dispatch:
     inputs:
       push:
