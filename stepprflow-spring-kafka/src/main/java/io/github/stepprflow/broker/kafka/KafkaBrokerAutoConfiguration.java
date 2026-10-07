@@ -132,7 +132,7 @@ public class KafkaBrokerAutoConfiguration {
             log.warn("stepprflow.kafka.topic-pattern is left at the default \".*\": "
                     + "this subscribes to EVERY topic on the Kafka cluster. On a shared "
                     + "cluster, scope it to your own workflow topics (e.g. "
-                    + "\"myservice\\\\..*\") to avoid fetching and deserializing unrelated "
+                    + "\"myservice\\..*\") to avoid fetching and deserializing unrelated "
                     + "traffic.");
         }
     }
