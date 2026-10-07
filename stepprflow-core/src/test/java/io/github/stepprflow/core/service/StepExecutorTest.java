@@ -25,6 +25,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -489,6 +490,98 @@ class StepExecutorTest {
 
             assertThat(retryMessage.getRetryInfo().getNextRetryAt()).isNotNull();
             assertThat(retryMessage.getRetryInfo().getAttempt()).isEqualTo(2);
+        }
+    }
+
+    @Nested
+    @DisplayName("security context restoration (SF-1)")
+    class SecurityContextRestoreTests {
+
+        private StepprFlowProperties.Dlq dlqConfig;
+
+        @BeforeEach
+        void setUpDlq() {
+            dlqConfig = new StepprFlowProperties.Dlq();
+            dlqConfig.setEnabled(true);
+            dlqConfig.setSuffix(".dlq");
+        }
+
+        @Test
+        @DisplayName("Should DLQ (not retry, not propagate, not execute the step) when restore fails")
+        void shouldDlqAndNotRetryWhenRestoreFails() throws Exception {
+            when(properties.getDlq()).thenReturn(dlqConfig);
+            testMessage = testMessage.toBuilder()
+                    .securityContext("expired-jwt")
+                    .build();
+
+            StepDefinition step1 = createStepDefinition(1, "step1");
+            testDefinition = createWorkflowDefinition(List.of(step1));
+            when(registry.getDefinition("test-topic")).thenReturn(testDefinition);
+
+            // A fail-close propagator throws when the embedded credential is no
+            // longer valid (e.g. expired JWT). This must not escape execute().
+            doThrow(new RuntimeException("Jwt expired"))
+                    .when(securityContextPropagator).restore(anyString());
+
+            // Must NOT propagate: a thrown exception here would leave the broker
+            // message un-acked and redelivered forever (poison-pill).
+            stepExecutor.execute(testMessage);
+
+            // Routed straight to DLQ as a terminal, non-retryable failure.
+            verify(messageBroker).send(eq("test-topic.dlq"), messageCaptor.capture());
+            WorkflowMessage dlqMessage = messageCaptor.getValue();
+            assertThat(dlqMessage.getStatus()).isEqualTo(WorkflowStatus.FAILED);
+            assertThat(dlqMessage.getErrorInfo()).isNotNull();
+            assertThat(dlqMessage.getErrorInfo().getCode())
+                    .isEqualTo("SECURITY_CONTEXT_RESTORE_FAILED");
+
+            // Never retried; the step handler is never invoked.
+            verify(messageBroker, never()).send(eq("test-topic.retry"), any());
+            assertThat(testWorkflow.step1Called).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should clear the security context even when restore fails")
+        void shouldClearContextWhenRestoreFails() throws Exception {
+            when(properties.getDlq()).thenReturn(dlqConfig);
+            testMessage = testMessage.toBuilder()
+                    .securityContext("expired-jwt")
+                    .build();
+
+            StepDefinition step1 = createStepDefinition(1, "step1");
+            testDefinition = createWorkflowDefinition(List.of(step1));
+            when(registry.getDefinition("test-topic")).thenReturn(testDefinition);
+
+            doThrow(new RuntimeException("Jwt expired"))
+                    .when(securityContextPropagator).restore(anyString());
+
+            stepExecutor.execute(testMessage);
+
+            // clear() must run on the failing path too, or the restored context
+            // leaks onto the pooled consumer thread (cross-identity bleed).
+            InOrder inOrder = inOrder(securityContextPropagator);
+            inOrder.verify(securityContextPropagator).restore("expired-jwt");
+            inOrder.verify(securityContextPropagator).clear();
+        }
+
+        @Test
+        @DisplayName("Should clear the security context after a successful step")
+        void shouldClearContextAfterSuccessfulStep() throws Exception {
+            testMessage = testMessage.toBuilder()
+                    .securityContext("valid-jwt")
+                    .build();
+
+            StepDefinition step1 = createStepDefinition(1, "step1");
+            StepDefinition step2 = createStepDefinition(2, "step2");
+            testDefinition = createWorkflowDefinition(List.of(step1, step2));
+            when(registry.getDefinition("test-topic")).thenReturn(testDefinition);
+
+            stepExecutor.execute(testMessage);
+
+            InOrder inOrder = inOrder(securityContextPropagator);
+            inOrder.verify(securityContextPropagator).restore("valid-jwt");
+            inOrder.verify(securityContextPropagator).clear();
+            assertThat(testWorkflow.step1Called).isTrue();
         }
     }
 
