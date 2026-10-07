@@ -251,6 +251,11 @@ jobs:
       contents: read
       packages: write
 
+    env:
+      # Exposed as env so it can be used in `if:` conditions (secrets cannot be
+      # referenced directly there). Empty when the Docker Hub secret is unset.
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -267,19 +272,33 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Docker Hub is published only when its credentials are configured; without
+      # them the job degrades to ghcr.io alone instead of failing (and taking
+      # ghcr down with it).
       - name: Log in to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Resolve image targets
+        id: targets
+        run: |
+          {
+            echo "images<<IMAGES_EOF"
+            echo "ghcr.io/stepprflow/stepprflow-monitor"
+            if [ -n "$DOCKERHUB_USERNAME" ]; then
+              echo "docker.io/$DOCKERHUB_USERNAME/stepprflow-monitor"
+            fi
+            echo "IMAGES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: |
-            ghcr.io/stepprflow/stepprflow-monitor
-            docker.io/${{ secrets.DOCKERHUB_USERNAME }}/stepprflow-monitor
+          images: ${{ steps.targets.outputs.images }}
           tags: |
             type=raw,value=latest
             type=raw,value=${{ needs.release.outputs.version }}
