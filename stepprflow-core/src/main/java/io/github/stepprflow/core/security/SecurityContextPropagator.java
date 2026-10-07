@@ -11,6 +11,22 @@ package io.github.stepprflow.core.security;
  * </ul>
  * </p>
  *
+ * <h2>Contract (SF-18)</h2>
+ * <ul>
+ *   <li>{@link #capture()} is invoked on the <em>caller's</em> thread when a
+ *       workflow starts; it MUST read the caller's context there (it is never
+ *       called on an engine worker thread).</li>
+ *   <li>{@link #restore(String)} and {@link #clear()} bracket a single step
+ *       execution on a possibly-pooled engine thread: the engine always calls
+ *       {@code clear()} in a {@code finally}, and an implementation MUST keep
+ *       the context thread-confined so a cleared context never leaks to the next
+ *       task on the same pooled thread.</li>
+ *   <li>Implementations MUST be thread-safe (steps run concurrently) and MUST
+ *       tolerate a {@code null} context in {@code restore} as a no-op.</li>
+ *   <li>Integrity (signing/verification) is handled by the engine around this
+ *       SPI; an implementation only moves the opaque context string.</li>
+ * </ul>
+ *
  * @see NoOpSecurityContextPropagator
  */
 public interface SecurityContextPropagator {
