@@ -6,10 +6,14 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Java](https://img.shields.io/badge/Java-21+-orange.svg)](https://openjdk.org/projects/jdk/21/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5+-green.svg)](https://spring.io/projects/spring-boot)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.stepprflow/stepprflow-core.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.stepprflow/stepprflow-core)
+[![Website](https://img.shields.io/badge/Website-stepprflow.github.io-0ea5e9.svg)](https://stepprflow.github.io/stepprflow/)
 
 A multi-broker workflow orchestration framework for Spring Boot applications.
 
 Steppr Flow enables you to build resilient, async multi-step workflows with support for multiple message brokers (Kafka, RabbitMQ).
+
+**🌐 [Website](https://stepprflow.github.io/stepprflow/) · 📦 [Maven Central](https://central.sonatype.com/artifact/io.github.stepprflow/stepprflow-core) · 🐳 [Docker Hub](https://hub.docker.com/r/alimhin/stepprflow-monitor)**
 
 ## Features
 
