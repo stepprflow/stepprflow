@@ -1,6 +1,11 @@
 package io.github.stepprflow.monitor.security;
 
 import io.github.stepprflow.monitor.MonitorProperties;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -24,8 +29,12 @@ import org.springframework.security.oauth2.core.oidc.user.OidcUserAuthority;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Dual-mode security for the monitoring API, dashboard and WebSocket (SF-5).
@@ -95,13 +104,22 @@ public class MonitorSecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/**").hasAuthority(OPERATOR)
                 .requestMatchers(HttpMethod.DELETE, "/api/**").hasAuthority(OPERATOR)
                 .requestMatchers(HttpMethod.PATCH, "/api/**").hasAuthority(OPERATOR)
-                .requestMatchers("/api/**", "/ws/**").authenticated()
+                // Reads require an explicit monitoring role, not merely being
+                // authenticated: in OIDC mode a realm account with no stepprflow
+                // role must not be able to read executions/payloads/metrics.
+                .requestMatchers("/api/**", "/ws/**").hasAnyAuthority(VIEWER, OPERATOR)
                 .anyRequest().authenticated())
             // SPA-friendly CSRF: non-HttpOnly cookie the UI echoes as X-XSRF-TOKEN.
             // The WebSocket handshake carries no CSRF token (authz is by session).
             .csrf(csrf -> csrf
                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                 .ignoringRequestMatchers("/ws/**"))
+            // Force the deferred CSRF token to load so the XSRF-TOKEN cookie is
+            // actually written: a pure SPA never reads the token server-side, so
+            // without this the cookie is never set and the form login and every
+            // mutation would be rejected with 403.
+            .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
             // XHR under /api gets a 401 instead of a login redirect; browser
             // navigations still redirect to the login entry point.
             .exceptionHandling(ex -> ex.defaultAuthenticationEntryPointFor(
@@ -194,5 +212,25 @@ public class MonitorSecurityConfig {
 
     private static String normalizeRole(final String role) {
         return VIEWER.equalsIgnoreCase(role) ? VIEWER : OPERATOR;
+    }
+
+    /**
+     * Forces the deferred {@link CsrfToken} to be resolved on every request so
+     * the {@code XSRF-TOKEN} cookie is written for the SPA to read.
+     */
+    static final class CsrfCookieFilter extends OncePerRequestFilter {
+        @Override
+        protected void doFilterInternal(final HttpServletRequest request,
+                final HttpServletResponse response, final FilterChain filterChain)
+                throws ServletException, IOException {
+            final CsrfToken csrfToken =
+                    (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+            if (csrfToken != null) {
+                // Accessing the token value triggers the repository to persist it
+                // (write the cookie).
+                csrfToken.getToken();
+            }
+            filterChain.doFilter(request, response);
+        }
     }
 }
