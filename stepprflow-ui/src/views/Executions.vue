@@ -77,6 +77,8 @@
               <button
                 v-if="exec.status === 'FAILED' || exec.status === 'RETRY_PENDING'"
                 class="btn-success btn-sm mr-1"
+                :disabled="!auth.isOperator"
+                :title="auth.isOperator ? '' : operatorOnlyTitle"
                 @click="confirmResume(exec)"
               >
                 Resume
@@ -84,6 +86,8 @@
               <button
                 v-if="exec.status === 'IN_PROGRESS' || exec.status === 'PENDING'"
                 class="btn-danger btn-sm"
+                :disabled="!auth.isOperator"
+                :title="auth.isOperator ? '' : operatorOnlyTitle"
                 @click="confirmCancel(exec)"
               >
                 Cancel
@@ -121,10 +125,13 @@
 import { ref, reactive, watch, onMounted } from 'vue'
 import { format } from 'date-fns'
 import { useWorkflowStore } from '@/stores/workflow.js'
+import { useAuthStore } from '@/stores/auth.js'
 import StatusBadge from '@/components/StatusBadge.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 
 const store = useWorkflowStore()
+const auth = useAuthStore()
+const operatorOnlyTitle = 'Action réservée aux opérateurs'
 
 const allStatuses = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'RETRY_PENDING', 'CANCELLED']
 const searchQuery = ref(store.filters.search)

@@ -34,6 +34,8 @@
         <button
           v-if="exec.status === 'FAILED' || exec.status === 'RETRY_PENDING'"
           class="btn-success btn-sm"
+          :disabled="!auth.isOperator"
+          :title="auth.isOperator ? '' : operatorOnlyTitle"
           @click="confirmAction('resume')"
         >
           Resume
@@ -41,6 +43,8 @@
         <button
           v-if="exec.status === 'IN_PROGRESS' || exec.status === 'PENDING'"
           class="btn-danger btn-sm"
+          :disabled="!auth.isOperator"
+          :title="auth.isOperator ? '' : operatorOnlyTitle"
           @click="confirmAction('cancel')"
         >
           Cancel
@@ -135,6 +139,7 @@
       <PayloadEditor
         :payload="exec.payload"
         :has-changes="hasPayloadChanges"
+        :can-edit="auth.isOperator"
         @update="onPayloadUpdate"
         @restore="confirmRestore"
       />
@@ -249,6 +254,7 @@ import { computed, reactive, onMounted, onUnmounted } from 'vue'
 import { format } from 'date-fns'
 import { useWorkflowStore } from '@/stores/workflow.js'
 import { useToastStore } from '@/stores/toast.js'
+import { useAuthStore } from '@/stores/auth.js'
 import StatusBadge from '@/components/StatusBadge.vue'
 import PayloadEditor from '@/components/PayloadEditor.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
@@ -260,7 +266,9 @@ const props = defineProps({
 
 const store = useWorkflowStore()
 const toast = useToastStore()
+const auth = useAuthStore()
 const exec = computed(() => store.currentExecution)
+const operatorOnlyTitle = 'Action réservée aux opérateurs'
 
 const circumference = 2 * Math.PI * 52
 

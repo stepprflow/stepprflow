@@ -37,14 +37,33 @@
         <span class="font-medium text-emerald-600">{{ stats.completed ?? 0 }}</span>
       </div>
     </div>
+
+    <!-- Current user + logout -->
+    <div v-if="auth.authenticated && !auth.authDisabled" class="border-t border-gray-200 px-4 py-4">
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <p class="truncate text-sm font-medium text-gray-900" :title="auth.username">
+            {{ auth.username || 'Signed in' }}
+          </p>
+          <p class="text-xs" :class="auth.isOperator ? 'text-emerald-600' : 'text-gray-400'">
+            {{ auth.isOperator ? 'Operator' : 'Viewer' }}
+          </p>
+        </div>
+        <button type="button" class="btn-secondary btn-sm shrink-0" @click="auth.logout()">
+          Logout
+        </button>
+      </div>
+    </div>
   </aside>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import { useWorkflowStore } from '@/stores/workflow.js'
+import { useAuthStore } from '@/stores/auth.js'
 
 const store = useWorkflowStore()
+const auth = useAuthStore()
 const stats = computed(() => store.stats)
 
 const navItems = [
