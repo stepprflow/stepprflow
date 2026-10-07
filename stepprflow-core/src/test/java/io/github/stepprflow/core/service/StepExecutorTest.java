@@ -3,6 +3,7 @@ package io.github.stepprflow.core.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.stepprflow.core.StepprFlowProperties;
 import io.github.stepprflow.core.broker.MessageBroker;
+import io.github.stepprflow.core.exception.MessageSendException;
 import io.github.stepprflow.core.model.*;
 import io.github.stepprflow.core.security.ForgedSecurityContextException;
 import io.github.stepprflow.core.security.SecurityContextPropagator;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -111,7 +113,7 @@ class StepExecutorTest {
 
             stepExecutor.execute(testMessage);
 
-            verify(messageBroker, never()).send(any(), any());
+            verify(messageBroker, never()).sendSync(any(), any());
         }
 
         @Test
@@ -126,7 +128,7 @@ class StepExecutorTest {
 
             stepExecutor.execute(testMessage);
 
-            verify(messageBroker, never()).send(any(), any());
+            verify(messageBroker, never()).sendSync(any(), any());
         }
 
         @Test
@@ -141,7 +143,7 @@ class StepExecutorTest {
 
             stepExecutor.execute(testMessage);
 
-            verify(messageBroker).send(eq("test-topic"), messageCaptor.capture());
+            verify(messageBroker).sendSync(eq("test-topic"), messageCaptor.capture());
             WorkflowMessage sentMessage = messageCaptor.getValue();
 
             assertThat(sentMessage.getCurrentStep()).isEqualTo(2);
@@ -165,7 +167,7 @@ class StepExecutorTest {
 
             stepExecutor.execute(testMessage);
 
-            verify(messageBroker).send(eq("test-topic.completed"), messageCaptor.capture());
+            verify(messageBroker).sendSync(eq("test-topic.completed"), messageCaptor.capture());
             WorkflowMessage sentMessage = messageCaptor.getValue();
 
             assertThat(sentMessage.getStatus()).isEqualTo(WorkflowStatus.COMPLETED);
@@ -207,7 +209,7 @@ class StepExecutorTest {
 
             stepExecutor.execute(testMessage);
 
-            verify(messageBroker).send(eq("test-topic"), messageCaptor.capture());
+            verify(messageBroker).sendSync(eq("test-topic"), messageCaptor.capture());
             assertThat(testWorkflow.step1Called).isTrue();
         }
 
@@ -314,7 +316,7 @@ class StepExecutorTest {
 
             stepExecutor.execute(testMessage);
 
-            verify(messageBroker).send(eq("test-topic.retry"), messageCaptor.capture());
+            verify(messageBroker).sendSync(eq("test-topic.retry"), messageCaptor.capture());
             WorkflowMessage retryMessage = messageCaptor.getValue();
 
             assertThat(retryMessage.getStatus()).isEqualTo(WorkflowStatus.RETRY_PENDING);
@@ -344,7 +346,7 @@ class StepExecutorTest {
 
             stepExecutor.execute(testMessage);
 
-            verify(messageBroker).send(eq("test-topic.dlq"), messageCaptor.capture());
+            verify(messageBroker).sendSync(eq("test-topic.dlq"), messageCaptor.capture());
             WorkflowMessage dlqMessage = messageCaptor.getValue();
 
             assertThat(dlqMessage.getStatus()).isEqualTo(WorkflowStatus.FAILED);
@@ -365,7 +367,7 @@ class StepExecutorTest {
 
             stepExecutor.execute(testMessage);
 
-            verify(messageBroker).send(eq("test-topic.dlq"), any(WorkflowMessage.class));
+            verify(messageBroker).sendSync(eq("test-topic.dlq"), any(WorkflowMessage.class));
         }
 
         @Test
@@ -380,7 +382,7 @@ class StepExecutorTest {
 
             stepExecutor.execute(testMessage);
 
-            verify(messageBroker).send(eq("test-topic"), messageCaptor.capture());
+            verify(messageBroker).sendSync(eq("test-topic"), messageCaptor.capture());
             WorkflowMessage nextMessage = messageCaptor.getValue();
 
             assertThat(nextMessage.getCurrentStep()).isEqualTo(2);
@@ -432,7 +434,7 @@ class StepExecutorTest {
             stepExecutor.execute(testMessage);
 
             // Should not send to DLQ when disabled
-            verify(messageBroker, never()).send(eq("test-topic.dlq"), any());
+            verify(messageBroker, never()).sendSync(eq("test-topic.dlq"), any());
         }
 
         @Test
@@ -456,7 +458,7 @@ class StepExecutorTest {
 
             stepExecutor.execute(testMessage);
 
-            verify(messageBroker).send(eq("test-topic.dlq"), messageCaptor.capture());
+            verify(messageBroker).sendSync(eq("test-topic.dlq"), messageCaptor.capture());
             WorkflowMessage dlqMessage = messageCaptor.getValue();
 
             // Stack trace should be truncated to 2000 chars + "..."
@@ -500,7 +502,7 @@ class StepExecutorTest {
 
             stepExecutor.execute(testMessage);
 
-            verify(messageBroker).send(eq("test-topic.retry"), messageCaptor.capture());
+            verify(messageBroker).sendSync(eq("test-topic.retry"), messageCaptor.capture());
             WorkflowMessage retryMessage = messageCaptor.getValue();
 
             assertThat(retryMessage.getRetryInfo().getNextRetryAt()).isNotNull();
@@ -543,7 +545,7 @@ class StepExecutorTest {
             stepExecutor.execute(testMessage);
 
             // Routed straight to DLQ as a terminal, non-retryable failure.
-            verify(messageBroker).send(eq("test-topic.dlq"), messageCaptor.capture());
+            verify(messageBroker).sendSync(eq("test-topic.dlq"), messageCaptor.capture());
             WorkflowMessage dlqMessage = messageCaptor.getValue();
             assertThat(dlqMessage.getStatus()).isEqualTo(WorkflowStatus.FAILED);
             assertThat(dlqMessage.getErrorInfo()).isNotNull();
@@ -551,7 +553,7 @@ class StepExecutorTest {
                     .isEqualTo("SECURITY_CONTEXT_RESTORE_FAILED");
 
             // Never retried; the step handler is never invoked.
-            verify(messageBroker, never()).send(eq("test-topic.retry"), any());
+            verify(messageBroker, never()).sendSync(eq("test-topic.retry"), any());
             assertThat(testWorkflow.step1Called).isFalse();
         }
 
@@ -600,8 +602,8 @@ class StepExecutorTest {
             // and the context is cleared.
             stepExecutor.execute(testMessage);
 
-            verify(messageBroker, never()).send(eq("test-topic.dlq"), any());
-            verify(messageBroker, never()).send(eq("test-topic.retry"), any());
+            verify(messageBroker, never()).sendSync(eq("test-topic.dlq"), any());
+            verify(messageBroker, never()).sendSync(eq("test-topic.retry"), any());
             verify(securityContextPropagator).clear();
             assertThat(testWorkflow.step1Called).isFalse();
         }
@@ -667,8 +669,8 @@ class StepExecutorTest {
             stepExecutor.execute(testMessage);
 
             // Terminal, non-retryable: straight to DLQ, step never runs, no retry.
-            verify(messageBroker).send(eq("test-topic.dlq"), any(WorkflowMessage.class));
-            verify(messageBroker, never()).send(eq("test-topic.retry"), any());
+            verify(messageBroker).sendSync(eq("test-topic.dlq"), any(WorkflowMessage.class));
+            verify(messageBroker, never()).sendSync(eq("test-topic.retry"), any());
             assertThat(testWorkflow.step1Called).isFalse();
         }
     }
@@ -705,10 +707,57 @@ class StepExecutorTest {
 
             stepExecutor.execute(testMessage);
 
-            verify(messageBroker).send(eq("test-topic.dlq"), any(WorkflowMessage.class));
-            verify(messageBroker, never()).send(eq("test-topic.retry"), any());
+            verify(messageBroker).sendSync(eq("test-topic.dlq"), any(WorkflowMessage.class));
+            verify(messageBroker, never()).sendSync(eq("test-topic.retry"), any());
             verify(securityContextPropagator, never()).restore(any());
             assertThat(testWorkflow.step1Called).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("confirmed sends — no silent message loss (SF-4)")
+    class ConfirmedSendTests {
+
+        @Test
+        @DisplayName("Should use a confirmed (sync) send to advance to the next step")
+        void shouldUseConfirmedSendForAdvance() throws Exception {
+            StepDefinition step1 = createStepDefinition(1, "step1");
+            StepDefinition step2 = createStepDefinition(2, "step2");
+            testDefinition = createWorkflowDefinition(List.of(step1, step2));
+            when(registry.getDefinition("test-topic")).thenReturn(testDefinition);
+
+            stepExecutor.execute(testMessage);
+
+            verify(messageBroker).sendSync(eq("test-topic"), any(WorkflowMessage.class));
+            // The fire-and-forget send is never used for workflow production.
+            verify(messageBroker, never()).send(any(), any());
+        }
+
+        @Test
+        @DisplayName("Should propagate (so the record is not acked) when a confirmed send fails")
+        void shouldPropagateWhenConfirmedSendFails() throws Exception {
+            StepprFlowProperties.Retry retryConfig = new StepprFlowProperties.Retry();
+            retryConfig.setMaxAttempts(3);
+            retryConfig.setNonRetryableExceptions(List.of());
+            when(properties.getRetry()).thenReturn(retryConfig);
+            lenient().when(backoffCalculator.calculate(anyInt()))
+                    .thenReturn(Duration.ofSeconds(1));
+
+            StepDefinition step1 = createStepDefinition(1, "step1");
+            StepDefinition step2 = createStepDefinition(2, "step2");
+            testDefinition = createWorkflowDefinition(List.of(step1, step2));
+            when(registry.getDefinition("test-topic")).thenReturn(testDefinition);
+
+            // Broker unreachable: every confirmed send throws.
+            doThrow(new MessageSendException("kafka", "test-topic", "exec-123",
+                    "broker down", null))
+                    .when(messageBroker).sendSync(any(), any());
+
+            // The failure must escape execute() so the Kafka listener does NOT
+            // acknowledge the record (it is redelivered instead of being lost).
+            assertThatThrownBy(() -> stepExecutor.execute(testMessage))
+                    .isInstanceOf(MessageSendException.class);
+            assertThat(testWorkflow.step1Called).isTrue();
         }
     }
 

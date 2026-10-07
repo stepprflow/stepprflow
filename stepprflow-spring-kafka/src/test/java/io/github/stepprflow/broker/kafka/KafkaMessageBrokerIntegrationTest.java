@@ -316,7 +316,13 @@ class KafkaMessageBrokerIntegrationTest {
         Map<String, Object> consumerProps = new HashMap<>();
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-" + UUID.randomUUID());
-        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+        // 'earliest', not 'latest': with a brand-new group, 'latest' resolves the
+        // read position lazily on the first poll after assignment, so messages
+        // produced in the window right after waitForAssignment() can land before
+        // the position and be missed — the root cause of the flaky
+        // sendMultipleMessages test. Reading from the beginning and filtering by
+        // the per-test unique executionId makes delivery deterministic.
+        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
         consumerProps.put(JsonDeserializer.TRUSTED_PACKAGES, "*");
