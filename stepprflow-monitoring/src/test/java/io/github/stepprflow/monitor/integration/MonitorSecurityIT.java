@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -38,6 +39,16 @@ class MonitorSecurityIT extends MongoDBTestContainerConfig {
         mockMvc.perform(get("/api/auth/config"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mode").value("basic"));
+    }
+
+    @Test
+    @DisplayName("The XSRF-TOKEN cookie is emitted so the SPA can send it back (B1)")
+    void csrfCookieIsEmitted() throws Exception {
+        // Without the CsrfCookieFilter forcing the deferred token to load, the
+        // cookie would never be written and login + every mutation would 403.
+        mockMvc.perform(get("/api/auth/config"))
+                .andExpect(status().isOk())
+                .andExpect(cookie().exists("XSRF-TOKEN"));
     }
 
     @Test
