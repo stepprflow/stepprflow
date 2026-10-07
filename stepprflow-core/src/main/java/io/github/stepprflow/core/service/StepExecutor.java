@@ -154,8 +154,15 @@ public class StepExecutor {
         } catch (Exception e) {
             handleFailure(message, step, definition, e);
         } finally {
-            // Always clear security context after execution
-            securityContextPropagator.clear();
+            // Always clear security context after execution. Guard it: if clear()
+            // itself threw, the exception would escape execute() and re-introduce
+            // the very poison-pill this method hardens against.
+            try {
+                securityContextPropagator.clear();
+            } catch (Exception clearError) {
+                log.error("Failed to clear security context after step for workflow {} [{}]",
+                        message.getTopic(), message.getExecutionId(), clearError);
+            }
         }
     }
 
@@ -282,7 +289,7 @@ public class StepExecutor {
             final WorkflowDefinition definition,
             final Throwable cause) {
         log.error("Security context restore failed for workflow {} [{}] at step {}/{} ({}); "
-                        + "routing to DLQ (non-retryable): {}",
+                        + "handling as terminal, non-retryable failure (DLQ if enabled): {}",
                 message.getTopic(), message.getExecutionId(), step.getId(),
                 message.getTotalSteps(), step.getLabel(), cause.getMessage(), cause);
 

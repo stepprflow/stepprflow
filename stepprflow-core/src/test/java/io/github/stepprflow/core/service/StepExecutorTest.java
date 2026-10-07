@@ -565,6 +565,33 @@ class StepExecutorTest {
         }
 
         @Test
+        @DisplayName("Should not retry, throw or execute the step when restore fails and DLQ is disabled")
+        void shouldNotRetryOrThrowWhenRestoreFailsAndDlqDisabled() throws Exception {
+            dlqConfig.setEnabled(false);
+            when(properties.getDlq()).thenReturn(dlqConfig);
+            testMessage = testMessage.toBuilder()
+                    .securityContext("expired-jwt")
+                    .build();
+
+            StepDefinition step1 = createStepDefinition(1, "step1");
+            testDefinition = createWorkflowDefinition(List.of(step1));
+            when(registry.getDefinition("test-topic")).thenReturn(testDefinition);
+
+            doThrow(new RuntimeException("Jwt expired"))
+                    .when(securityContextPropagator).restore(anyString());
+
+            // Even with DLQ off, the restore failure must still not poison-pill the
+            // broker: no exception escapes, nothing is retried, the step never runs,
+            // and the context is cleared.
+            stepExecutor.execute(testMessage);
+
+            verify(messageBroker, never()).send(eq("test-topic.dlq"), any());
+            verify(messageBroker, never()).send(eq("test-topic.retry"), any());
+            verify(securityContextPropagator).clear();
+            assertThat(testWorkflow.step1Called).isFalse();
+        }
+
+        @Test
         @DisplayName("Should clear the security context after a successful step")
         void shouldClearContextAfterSuccessfulStep() throws Exception {
             testMessage = testMessage.toBuilder()
