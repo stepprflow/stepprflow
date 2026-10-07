@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Duration;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -306,6 +307,49 @@ class WorkflowMetricsListenerTest {
             // Then
             verify(metrics, never()).recordStepTimeout(anyString(), anyString());
             verify(metrics).recordStepFailed("payment-workflow", "Process Payment");
+        }
+    }
+
+    @Nested
+    @DisplayName("SF-14: start-time maps are bounded (no unbounded leak)")
+    class BoundedTrackingTests {
+
+        @Test
+        @DisplayName("BoundedLru evicts the eldest entry once capacity is exceeded")
+        void boundedLruEvictsEldest() {
+            WorkflowMetricsListener.BoundedLru<String, Integer> map =
+                    new WorkflowMetricsListener.BoundedLru<>(2);
+
+            map.put("a", 1);
+            map.put("b", 2);
+            map.put("c", 3);
+
+            // 'a' (eldest) is evicted; the map never exceeds its capacity.
+            assertThat(map).hasSize(2).containsOnlyKeys("b", "c");
+        }
+
+        @Test
+        @DisplayName("a workflow whose start-time was evicted completes with zero duration "
+                + "instead of leaking its entry")
+        void evictedWorkflowCompletesWithZeroDuration() {
+            // maxTracked=1: each new PENDING evicts the previous execution's start time.
+            WorkflowMetricsListener bounded = new WorkflowMetricsListener(metrics, 1);
+
+            bounded.onWorkflowMessage(new WorkflowMessageEvent(this, WorkflowMessage.builder()
+                    .executionId("exec-A").topic("t").serviceName("s")
+                    .status(WorkflowStatus.PENDING).build()));
+            // Second PENDING evicts exec-A's start time (capacity 1).
+            bounded.onWorkflowMessage(new WorkflowMessageEvent(this, WorkflowMessage.builder()
+                    .executionId("exec-B").topic("t").serviceName("s")
+                    .status(WorkflowStatus.PENDING).build()));
+
+            // Completing exec-A finds no tracked start -> zero duration, and crucially
+            // the map could never have grown past its bound regardless of volume.
+            bounded.onWorkflowMessage(new WorkflowMessageEvent(this, WorkflowMessage.builder()
+                    .executionId("exec-A").topic("t").serviceName("s")
+                    .status(WorkflowStatus.COMPLETED).build()));
+
+            verify(metrics).recordWorkflowCompleted(eq("t"), eq("s"), eq(Duration.ZERO));
         }
     }
 }

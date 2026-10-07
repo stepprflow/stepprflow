@@ -5,7 +5,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Build Spring Boot application
 # -----------------------------------------------------------------------------
-FROM maven:3.9-eclipse-temurin-21-alpine AS builder
+FROM maven:3.9-eclipse-temurin-21-alpine@sha256:308cba8b638ed7e4658cea3f8399066219466211c805f6d5728c3c9c7614661b AS builder
 
 WORKDIR /app
 
@@ -34,7 +34,7 @@ RUN mvn clean package -pl stepprflow-monitoring -am -DskipTests -q
 # -----------------------------------------------------------------------------
 # Stage 2: Extract Spring Boot layers for optimized caching
 # -----------------------------------------------------------------------------
-FROM eclipse-temurin:21-jdk-alpine AS layers
+FROM eclipse-temurin:21-jdk-alpine@sha256:0bfc69a4758a86710e5c474032d28400a8bd00874766f9e8b1642ac2fd293159 AS layers
 
 WORKDIR /app
 COPY --from=builder /app/stepprflow-monitoring/target/*.jar app.jar
@@ -43,7 +43,7 @@ RUN java -Djarmode=layertools -jar app.jar extract
 # -----------------------------------------------------------------------------
 # Stage 3: Final runtime image
 # -----------------------------------------------------------------------------
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre-alpine@sha256:51ab5e3302e7141ce665ca3ea85e8b5cd648eafbc3c0c90dd79d6537684e4555
 
 LABEL maintainer="Steppr Flow Team <contact@stepprflow.io>"
 LABEL description="Steppr Flow Monitoring Dashboard"
