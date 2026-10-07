@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Steppr Flow</title>
 <meta name="description" content="A multi-broker, resilient workflow orchestration framework for Spring Boot — async multi-step pipelines over Kafka or RabbitMQ with at-least-once delivery, retries, DLQ, signed security-context propagation, timeouts, idempotency and an optional monitoring dashboard.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0e13'/%3E%3Cpath d='M7 20h5v-5h5v-5h6' fill='none' stroke='%23ff5a3c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='24' cy='10' r='2.4' fill='%23ff5a3c'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="apple-touch-icon" href="stepprflow-logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -17,8 +18,8 @@
     --ink: #0f141b;
     --muted: #5a6472;
     --line: #e1e6ec;
-    --accent: #ff4d2e;
-    --accent-ink: #c5300f;
+    --accent: #0ea5e9;
+    --accent-ink: #0369a1;
     --ok: #138a5e;
     --warn: #b4790b;
     --code-bg: #0d1017;
@@ -39,8 +40,8 @@
       --ink: #eceff3;
       --muted: #94a1b2;
       --line: #212a35;
-      --accent: #ff5a3c;
-      --accent-ink: #ff8368;
+      --accent: #38bdf8;
+      --accent-ink: #7dd3fc;
       --ok: #35c892;
       --warn: #e8b14b;
       --code-bg: #0c1016;
@@ -56,8 +57,8 @@
     --ink: #eceff3;
     --muted: #94a1b2;
     --line: #212a35;
-    --accent: #ff5a3c;
-    --accent-ink: #ff8368;
+    --accent: #38bdf8;
+    --accent-ink: #7dd3fc;
     --ok: #35c892;
     --warn: #e8b14b;
     --code-bg: #0c1016;
@@ -96,7 +97,7 @@
   }
   .bar .wrap { display: flex; align-items: center; gap: 16px; height: 62px; }
   .brand { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 800; letter-spacing: -.02em; font-size: 18px; }
-  .brand .logo { width: 26px; height: 26px; }
+  .brand .logo { width: 26px; height: 26px; border-radius: 6px; display: block; }
   .bar nav { margin-left: auto; display: flex; align-items: center; gap: 22px; }
   .bar nav a.nl { font-size: 14.5px; color: var(--muted); font-weight: 500; }
   .bar nav a.nl:hover { color: var(--ink); }
@@ -169,7 +170,7 @@
   .code .ct .tag { color: var(--accent); }
   .code pre { margin: 0; padding: 16px 18px; overflow-x: auto; }
   .code code { font-family: var(--mono); font-size: 13.2px; color: var(--code-ink); line-height: 1.65; white-space: pre; }
-  .code .cp { color: #6ad3a6; } .code .ck { color: #ff8368; } .code .cc { color: #6b7686; }
+  .code .cp { color: #6ad3a6; } .code .ck { color: #7dd3fc; } .code .cc { color: #6b7686; }
   .copy { margin-left: auto; background: transparent; border: 1px solid var(--code-line); color: #8b97a7;
     font-family: var(--mono); font-size: 11.5px; padding: 3px 9px; border-radius: 7px; cursor: pointer; }
   .copy:hover { color: #fff; border-color: #3a4656; }
@@ -214,7 +215,7 @@
 <header class="bar">
   <div class="wrap">
     <a class="brand" href="#top">
-      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor" opacity=".08"/><path d="M7 20h5v-5h5v-5h6" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="24" cy="10" r="2.5" fill="var(--accent)"/></svg>
+      <img class="logo" src="stepprflow-logo.png" alt="Steppr Flow logo" width="26" height="26">
       Steppr Flow
     </a>
     <nav>
