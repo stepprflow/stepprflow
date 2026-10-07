@@ -13,8 +13,10 @@ import io.github.stepprflow.core.security.ForgedSecurityContextException;
 import io.github.stepprflow.core.security.SecurityContextPropagator;
 import io.github.stepprflow.core.security.SecurityContextSigner;
 import io.github.stepprflow.core.security.TrustedClassResolver;
+import io.github.stepprflow.core.exception.StepTimeoutException;
 import io.github.stepprflow.core.security.UntrustedPayloadTypeException;
 import io.github.stepprflow.core.util.StackTraceUtils;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -24,6 +26,14 @@ import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Executes workflow steps.
@@ -60,6 +70,14 @@ public class StepExecutor {
     private final SecurityContextSigner securityContextSigner;
 
     /**
+     * SF-6: bounded worker pool used to run steps under a timeout. Non-null
+     * only when {@code stepprflow.timeout.enabled=true}; when null, timeout
+     * enforcement is off and steps run inline on the consumer thread exactly
+     * as before.
+     */
+    private final ExecutorService stepTimeoutExecutor;
+
+    /**
      * Constructor with qualified ObjectMapper.
      *
      * @param registry the workflow registry
@@ -91,6 +109,38 @@ public class StepExecutor {
         this.securityContextPropagator = securityContextPropagator;
         this.trustedClassResolver = trustedClassResolver;
         this.securityContextSigner = securityContextSigner;
+        // getTimeout() is always a populated Timeout on a real bean; tolerate a
+        // null here only so a bare mocked properties doesn't NPE at construction.
+        StepprFlowProperties.Timeout timeoutCfg = properties.getTimeout();
+        this.stepTimeoutExecutor = (timeoutCfg != null && timeoutCfg.isEnabled())
+                ? createTimeoutExecutor(timeoutCfg.getPoolSize())
+                : null;
+    }
+
+    private static ExecutorService createTimeoutExecutor(final int poolSize) {
+        final int size = poolSize > 0 ? poolSize : 1;
+        ThreadFactory factory = new ThreadFactory() {
+            private final AtomicInteger counter = new AtomicInteger(1);
+
+            @Override
+            public Thread newThread(final Runnable r) {
+                Thread t = new Thread(r, "stepprflow-timeout-" + counter.getAndIncrement());
+                t.setDaemon(true);
+                return t;
+            }
+        };
+        return Executors.newFixedThreadPool(size, factory);
+    }
+
+    /**
+     * SF-6: shut the timeout worker pool down on bean destruction so a
+     * redeploy/restart does not leak threads.
+     */
+    @PreDestroy
+    void shutdownTimeoutExecutor() {
+        if (stepTimeoutExecutor != null) {
+            stepTimeoutExecutor.shutdownNow();
+        }
     }
 
     /**
@@ -131,8 +181,8 @@ public class StepExecutor {
             log.debug("Security context in message: {}, propagator: {}",
                     securityContext != null ? "present" : "NULL",
                     securityContextPropagator.getClass().getSimpleName());
+            String rawContext = null;
             if (securityContext != null) {
-                String rawContext;
                 try {
                     // SF-3: verify the HMAC envelope (bound to executionId+topic)
                     // before restoring. A forged/tampered/replayed context is
@@ -158,9 +208,18 @@ public class StepExecutor {
             // Deserialize payload
             Object payload = deserializePayload(message, step);
 
-            // Execute step method
+            // Execute step method. SF-6: when timeout enforcement is on and the
+            // step has an effective timeout, run it on a bounded worker and
+            // abort it past the deadline; otherwise invoke inline on the
+            // consumer thread exactly as before.
             Method method = step.getMethod();
-            method.invoke(definition.getHandler(), payload);
+            Duration effectiveTimeout = resolveEffectiveTimeout(step);
+            if (effectiveTimeout != null) {
+                invokeWithTimeout(definition.getHandler(), method, payload,
+                        rawContext, step, effectiveTimeout);
+            } else {
+                method.invoke(definition.getHandler(), payload);
+            }
 
             // Check if last step
             if (definition.isLastStep(stepId)) {
@@ -196,6 +255,102 @@ public class StepExecutor {
                 log.error("Failed to clear security context after step for workflow {} [{}]",
                         message.getTopic(), message.getExecutionId(), clearError);
             }
+        }
+    }
+
+    /**
+     * SF-6: resolve the timeout to enforce for a step, or {@code null} when no
+     * enforcement applies. Returns {@code null} when the feature is off (no
+     * worker pool), or when neither the step's {@code @Timeout} nor the
+     * configured {@code defaultStepTimeout} yields a positive duration.
+     *
+     * @param step the step definition
+     * @return the effective timeout to enforce, or {@code null}
+     */
+    private Duration resolveEffectiveTimeout(final StepDefinition step) {
+        if (stepTimeoutExecutor == null) {
+            return null;
+        }
+        Duration timeout = step.getTimeout();
+        if (timeout == null) {
+            timeout = properties.getTimeout().getDefaultStepTimeout();
+        }
+        if (timeout == null || timeout.isZero() || timeout.isNegative()) {
+            return null;
+        }
+        return timeout;
+    }
+
+    /**
+     * SF-6: run a step on the bounded worker pool, aborting it once the
+     * deadline passes. The verified security context is re-restored on the
+     * worker (the consumer thread already validated it, so this restore of the
+     * same value is expected to succeed) and cleared in a finally on the
+     * worker, mirroring the SF-1 hardening on the consumer thread so a timed-out
+     * or interrupted step never leaks its context onto the pooled worker.
+     *
+     * <p>Cancellation is cooperative: {@code future.cancel(true)} interrupts the
+     * worker, but a step that ignores interruption keeps running (holding its
+     * worker and its context) until it returns.</p>
+     *
+     * @param handler the workflow handler instance
+     * @param method the step method
+     * @param payload the deserialized payload
+     * @param rawContext the verified raw security context, or {@code null}
+     * @param step the step definition (for the timeout exception)
+     * @param timeout the effective timeout to enforce
+     * @throws Exception the step's own exception (wrapped in
+     *     {@link InvocationTargetException}), a {@link StepTimeoutException} on
+     *     deadline, or an {@link InterruptedException} if the consumer thread is
+     *     interrupted while waiting
+     */
+    private void invokeWithTimeout(
+            final Object handler,
+            final Method method,
+            final Object payload,
+            final String rawContext,
+            final StepDefinition step,
+            final Duration timeout) throws Exception {
+        Future<?> future = stepTimeoutExecutor.submit(() -> {
+            boolean restored = false;
+            try {
+                if (rawContext != null) {
+                    securityContextPropagator.restore(rawContext);
+                    restored = true;
+                }
+                method.invoke(handler, payload);
+                return null;
+            } finally {
+                if (restored) {
+                    try {
+                        securityContextPropagator.clear();
+                    } catch (Exception clearError) {
+                        log.error("Failed to clear security context on timeout worker "
+                                + "for step {} ({})", step.getId(), step.getLabel(), clearError);
+                    }
+                }
+            }
+        });
+
+        Instant start = Instant.now();
+        try {
+            future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException te) {
+            future.cancel(true);
+            Duration elapsed = Duration.between(start, Instant.now());
+            throw new StepTimeoutException(step.getLabel(), step.getId(), timeout, elapsed);
+        } catch (ExecutionException ee) {
+            // Unwrap and rethrow the worker's failure so handleFailure sees the
+            // real cause (InvocationTargetException is unwrapped there as usual).
+            Throwable cause = ee.getCause();
+            if (cause instanceof Exception) {
+                throw (Exception) cause;
+            }
+            throw new IllegalStateException("Step failed with a non-Exception throwable", cause);
+        } catch (InterruptedException ie) {
+            future.cancel(true);
+            Thread.currentThread().interrupt();
+            throw ie;
         }
     }
 
