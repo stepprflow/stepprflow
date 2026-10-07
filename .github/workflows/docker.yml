@@ -12,8 +12,10 @@ on:
       - 'stepprflow-spring-rabbitmq/**'
       - 'stepprflow-monitoring/**'
       - 'stepprflow-ui/**'
+      - 'stepprflow-samples/**'
       - 'Dockerfile'
       - 'docker-compose*.yml'
+      - 'scripts/e2e-check.sh'
       - '.github/workflows/docker.yml'
   pull_request:
     branches:
@@ -24,7 +26,10 @@ on:
       - 'stepprflow-spring-rabbitmq/**'
       - 'stepprflow-monitoring/**'
       - 'stepprflow-ui/**'
+      - 'stepprflow-samples/**'
       - 'Dockerfile'
+      - 'docker-compose*.yml'
+      - 'scripts/e2e-check.sh'
   workflow_dispatch:
     inputs:
       push:
@@ -208,16 +213,22 @@ jobs:
             "$IMAGE"
 
           # Poll /actuator/health until UP (startup + Mongo + Kafka), up to ~150s.
+          # Gate on the HTTP status, not a substring: /actuator/health returns 200
+          # only when the TOP-LEVEL status is UP and 503 when any component
+          # (e.g. Mongo) is DOWN. Grepping for '"status":"UP"' would match a
+          # healthy sub-component while the overall status is DOWN — a false pass.
           ok=""
           for i in $(seq 1 30); do
-            body=$(curl -s http://localhost:8090/actuator/health || true)
-            echo "attempt $i: $body"
-            if echo "$body" | grep -q '"status":"UP"'; then ok=1; break; fi
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8090/actuator/health || true)
+            echo "attempt $i: health HTTP $code"
+            if [ "$code" = "200" ]; then ok=1; break; fi
             sleep 5
           done
 
           if [ -z "$ok" ]; then
-            echo "::error::monitor health never reached UP"
+            echo "::error::monitor health never reached UP (HTTP 200)"
+            curl -s http://localhost:8090/actuator/health || true
+            echo
             docker logs stepprflow-test | tail -80
             exit 1
           fi
@@ -230,10 +241,34 @@ jobs:
           echo "Monitor image smoke test passed."
           docker rm -f stepprflow-test
 
+  # Full end-to-end: a real producer (sample OrderWorkflow) drives the whole
+  # chain workflow -> Kafka -> monitor -> Mongo -> monitor API. Unlike the image
+  # smoke above (which only proves the monitor boots and serves), this proves an
+  # execution is actually ingested and reaches COMPLETED.
+  e2e:
+    name: End-to-End (samples)
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Build and start the e2e stack
+        run: docker compose -f docker-compose.e2e.yml up --build -d
+
+      - name: Run end-to-end smoke
+        run: bash scripts/e2e-check.sh
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.e2e.yml down -v
+
   # Update deployment (optional - triggered on release)
   notify:
     name: Notify Release
-    needs: [build, scan, test]
+    needs: [build, scan, test, e2e]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
 

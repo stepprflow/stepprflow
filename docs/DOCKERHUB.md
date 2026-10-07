@@ -19,7 +19,7 @@ libraries on [Maven Central](https://central.sonatype.com/artifact/io.github.ste
 
 | Tag | Notes |
 |-----|-------|
-| `1.1.0` | The release version — each release is published under its own version tag |
+| `1.1.1` | The release version — each release is published under its own version tag |
 | `latest` | Points to the most recent release |
 
 > For a reproducible deployment, pin by digest (`@sha256:…`) rather than a tag.
@@ -44,7 +44,7 @@ docker run -d --name stepprflow-monitor \
   -e STEPPRFLOW_MONITOR_AUTH_BASIC_USERNAME="admin" \
   -e STEPPRFLOW_MONITOR_AUTH_BASIC_PASSWORD="change-me" \
   -e STEPPRFLOW_MONITOR_AUTH_BASIC_ROLE="OPERATOR" \
-  alimhin/stepprflow-monitor:1.1.0
+  alimhin/stepprflow-monitor:1.1.1
 ```
 
 Then open **http://localhost:8090** (dashboard) — API under `/api`, health at
@@ -94,7 +94,7 @@ docker run -d --name stepprflow-monitor -p 8090:8090 \
   -e SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_KEYCLOAK_ISSUER_URI="https://keycloak.example.com/realms/my-realm" \
   -e SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_CLIENT_ID="stepprflow-monitor" \
   -e SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KEYCLOAK_CLIENT_SECRET="your-client-secret" \
-  alimhin/stepprflow-monitor:1.1.0
+  alimhin/stepprflow-monitor:1.1.1
 ```
 
 See the [security guide](https://github.com/stepprflow/stepprflow/blob/main/docs/security.md)
@@ -109,7 +109,7 @@ services:
   mongo:
     image: mongo:7
   monitor:
-    image: alimhin/stepprflow-monitor:1.1.0
+    image: alimhin/stepprflow-monitor:1.1.1
     ports: ["8090:8090"]
     environment:
       MONGODB_URI: mongodb://mongo:27017/stepprflow

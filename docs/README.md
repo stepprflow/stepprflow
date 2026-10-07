@@ -201,12 +201,12 @@ The workflow automatically:
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-core</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.1</version>
 </dependency>
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-spring-kafka</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.1</version>
 </dependency>
 ```
 

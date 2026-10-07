@@ -70,6 +70,18 @@
                 <configuration>
                     <mainClass>io.github.stepprflow.sample.SampleApplication</mainClass>
                 </configuration>
+                <!-- The reactor parent is not spring-boot-starter-parent, so the
+                     repackage goal is not bound by default and `mvn package`
+                     produces a plain (non-executable) jar. Bind it explicitly so
+                     the sample runs with `java -jar` and can be containerised. -->
+                <executions>
+                    <execution>
+                        <id>repackage</id>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

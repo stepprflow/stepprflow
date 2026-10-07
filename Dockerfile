@@ -47,9 +47,9 @@ RUN java -Djarmode=layertools -jar app.jar extract
 # -----------------------------------------------------------------------------
 FROM eclipse-temurin:21-jre-alpine@sha256:51ab5e3302e7141ce665ca3ea85e8b5cd648eafbc3c0c90dd79d6537684e4555
 
-LABEL maintainer="Steppr Flow Team <contact@stepprflow.io>"
+LABEL maintainer="Ali M'HIN <alimhin@gmail.com>"
 LABEL description="Steppr Flow Monitoring Dashboard"
-LABEL org.opencontainers.image.source="https://github.com/steppr-flow/stepprflow"
+LABEL org.opencontainers.image.source="https://github.com/stepprflow/stepprflow"
 LABEL org.opencontainers.image.title="Steppr Flow Dashboard"
 LABEL org.opencontainers.image.description="Multi-broker workflow orchestration monitoring dashboard"
 LABEL org.opencontainers.image.vendor="Steppr Flow"

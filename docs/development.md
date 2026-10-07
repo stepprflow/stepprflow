@@ -70,16 +70,24 @@ mvn -pl stepprflow-spring-kafka -am clean install
 docker-compose up -d
 ```
 
-2. Run the application with the `kafka` profile:
+2. Run the application with the `kafka` profile (the sample module lives in the
+   `full` profile):
 ```bash
-mvn -pl stepprflow-samples spring-boot:run -Dspring-boot.run.profiles=kafka
+mvn -Pfull -pl stepprflow-samples spring-boot:run -Dspring-boot.run.profiles=kafka
 ```
 
-3. Test the API:
+3. Test the API (the sample runs on port 8010; the body must be a full
+   `CreateOrderRequest`):
 ```bash
-curl -X POST http://localhost:8080/api/orders \
+curl -X POST http://localhost:8010/api/orders \
   -H "Content-Type: application/json" \
-  -d '{"productId": "PROD-001", "quantity": 2}'
+  -d '{
+    "customerId": "CUST-1",
+    "customerEmail": "customer@example.com",
+    "items": [{"productId": "PROD-001", "productName": "Widget", "quantity": 2, "price": 49.99}],
+    "payment": {"cardLast4": "4242", "cardType": "VISA"},
+    "shipping": {"street": "1 Main St", "city": "Paris", "state": "IDF", "zipCode": "75001", "country": "FR"}
+  }'
 ```
 
 ### RabbitMQ Sample
@@ -89,9 +97,10 @@ curl -X POST http://localhost:8080/api/orders \
 docker-compose up -d
 ```
 
-2. Run the application with the `rabbitmq` profile:
+2. Run the application with the `rabbitmq` profile (sample module is in the
+   `full` profile; it listens on port 8011 in rabbitmq mode):
 ```bash
-mvn -pl stepprflow-samples spring-boot:run -Dspring-boot.run.profiles=rabbitmq
+mvn -Pfull -pl stepprflow-samples spring-boot:run -Dspring-boot.run.profiles=rabbitmq
 ```
 
 ## Running the Dashboard
@@ -100,7 +109,9 @@ mvn -pl stepprflow-samples spring-boot:run -Dspring-boot.run.profiles=rabbitmq
 
 ```bash
 docker-compose up -d  # Start Kafka & MongoDB
-mvn -pl stepprflow-monitoring spring-boot:run
+# The monitor is fail-closed until an auth mode is set, so pass one.
+mvn -pl stepprflow-monitoring spring-boot:run \
+  -Dspring-boot.run.arguments="--stepprflow.monitor.auth.mode=basic --stepprflow.monitor.auth.basic.username=admin --stepprflow.monitor.auth.basic.password=change-me --stepprflow.monitor.auth.basic.role=OPERATOR"
 ```
 
 Access at: http://localhost:8090
@@ -254,7 +265,7 @@ Recommended extensions:
 <parent>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-parent</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.1</version>
 </parent>
 ```
 

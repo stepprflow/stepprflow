@@ -186,7 +186,10 @@ public class JwtSecurityContextPropagator implements SecurityContextPropagator {
 
             log.debug("Security context restored for user: {}", userContext.getUsername());
         } catch (ParseException e) {
-            log.warn("Failed to parse JWT token: {}", e.getMessage());
+            // A malformed context is a terminal failure: rethrow so stepprflow
+            // sends the message to the DLQ instead of running the step
+            // unauthenticated (see "Failure Handling"). Never swallow-and-continue.
+            throw new IllegalStateException("Unparseable security context", e);
         }
     }
 
@@ -293,6 +296,52 @@ public class SecurityContextFilter extends OncePerRequestFilter {
 }
 ```
 
+## Context Integrity (HMAC Signing)
+
+The security context travels inside the workflow message across the broker. Left
+unprotected, a crafted message could **forge an identity**. Steppr Flow signs the
+context envelope with an HMAC and verifies it before restoring (ADR-0003, SF-3).
+
+Enable it by configuring a **shared secret** on every service that participates
+in the same workflows:
+
+```yaml
+stepprflow:
+  security:
+    context-signing:
+      secret: ${STEPPRFLOW_CONTEXT_SIGNING_SECRET}   # same value on all services
+```
+
+- The captured context is wrapped as `<signature>.<rawContext>`, where the HMAC
+  (HMAC-SHA256) is **bound to the `executionId` and `topic`** — a signature
+  cannot be replayed onto a different execution or topic.
+- On restore, the signature is verified **before** the context is handed to your
+  `SecurityContextPropagator`. A missing or mismatched signature raises
+  `ForgedSecurityContextException` and the message is rejected (see Failure
+  Handling below).
+- When no secret is set, signing is **disabled**: the context travels unprotected
+  and a one-time warning is logged. Set a secret in any environment where the
+  broker is shared or reachable beyond the trusted services.
+- The raw context value (the JWT) is **never logged** — only its presence.
+
+## Failure Handling
+
+Two hardened guarantees apply to restore/verify (ADR-0003, SF-1):
+
+- **Always cleared, never leaked.** The context is captured on the *caller's*
+  thread (never an async worker), restored inside a `try/finally` in the step
+  executor, and **cleared in the `finally`** — including on the bounded timeout
+  worker — so it can never outlive one step execution on a pooled consumer
+  thread.
+- **Restore/verify failure is terminal and non-retryable.** If verification or
+  your `restore()` throws, the message goes **straight to the DLQ** and is
+  **not redelivered**: the credential is embedded in the message, so a retry
+  would fail identically and only poison-pill the consumer.
+
+Because a restore failure is terminal, your `restore()` must **not silently
+swallow** a malformed context and continue (that would run the step
+unauthenticated). Let the exception propagate so the framework can DLQ it.
+
 ## Configuration
 
 The security context propagator is automatically injected via Spring's dependency injection. Your custom implementation takes precedence over the default `NoOpSecurityContextPropagator` due to `@ConditionalOnMissingBean`:
@@ -322,6 +371,20 @@ If `restore()` doesn't set the context:
 2. Verify the JWT token is valid and parseable
 3. Check for `ParseException` in logs
 
+Note: a restore failure is **terminal** — the message is sent to the DLQ and not
+retried (see Failure Handling). If executions are landing in the DLQ right after
+start, inspect the DLQ'd message and your `restore()` logic.
+
+### Message rejected / sent to the DLQ with `ForgedSecurityContextException`
+
+The context's HMAC signature failed verification. Check that:
+1. **Every** participating service sets the *same*
+   `stepprflow.security.context-signing.secret` (a mismatch rejects every
+   context).
+2. The secret is actually loaded (env var resolved, not blank).
+3. The message was not replayed from a different execution/topic (the signature
+   is bound to `executionId`+`topic`).
+
 ### Enable debug logging
 
 ```yaml
@@ -344,6 +407,15 @@ This will show:
 
 3. **Handle missing context gracefully**: Steps should handle the case where security context is not available (e.g., for system-triggered workflows).
 
-4. **Log security events**: Log when security context is captured/restored for audit purposes.
+4. **Log security events**: Log when security context is captured/restored for audit purposes. Never log the raw token — log its presence only.
+
+5. **Enable context signing in shared environments**: Set
+   `stepprflow.security.context-signing.secret` (the same value on every
+   participating service) so a crafted message cannot forge an identity. Treat
+   the secret like any credential (Vault / env var, not committed).
+
+6. **Let restore failures be terminal**: Don't swallow a malformed or
+   unverifiable context in `restore()` — rethrow so the framework DLQs the
+   message instead of running the step unauthenticated.
 
 5. **Consider token expiration**: For long-running workflows, the JWT token may expire. Consider storing essential claims rather than the full token, or implement token refresh logic.
