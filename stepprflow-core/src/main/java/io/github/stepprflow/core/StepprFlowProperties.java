@@ -113,7 +113,16 @@ public class StepprFlowProperties {
         private Producer producer = new Producer();
 
         /**
-         * Pattern for topics to listen to.
+         * Regex pattern for the Kafka topics this service listens to.
+         * <p>
+         * SECURITY/PERF: the default {@code ".*"} subscribes to EVERY topic on
+         * the cluster. On a shared cluster this makes each service fetch and
+         * deserialize all other services' messages (CPU, log noise); only the
+         * runtime guard in the listener keeps them from being processed. Scope
+         * this to your own workflow topics (and their {@code .retry}) in any
+         * shared-cluster deployment — a startup warning is logged while it is
+         * left at {@code ".*"}.
+         * </p>
          */
         private String topicPattern = ".*";
 

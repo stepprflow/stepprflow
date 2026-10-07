@@ -156,6 +156,34 @@ class WorkflowStarterImplSecurityTest {
         }
     }
 
+    @Nested
+    @DisplayName("SF-11: startAsync captures on the caller's thread")
+    class AsyncContextCaptureTests {
+
+        @Test
+        @DisplayName("startAsync captures the security context on the caller's thread, "
+                + "not the async worker thread")
+        void startAsyncCapturesOnCallerThread() throws Exception {
+            when(registry.getDefinition("test-topic")).thenReturn(testDefinition);
+            Thread callerThread = Thread.currentThread();
+            java.util.concurrent.atomic.AtomicReference<Thread> captureThread =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            when(securityContextPropagator.capture()).thenAnswer(invocation -> {
+                captureThread.set(Thread.currentThread());
+                return "jwt-async";
+            });
+
+            workflowStarter.startAsync("test-topic", new TestPayload("data"))
+                    .get(5, java.util.concurrent.TimeUnit.SECONDS);
+
+            // The capture must happen on the caller's thread; capturing inside
+            // the CompletableFuture worker would read an empty/foreign context.
+            assertThat(captureThread.get()).isSameAs(callerThread);
+            verify(messageBroker).send(eq("test-topic"), messageCaptor.capture());
+            assertThat(messageCaptor.getValue().getSecurityContext()).isEqualTo("jwt-async");
+        }
+    }
+
     // Test payload class
     record TestPayload(String data) {
     }
