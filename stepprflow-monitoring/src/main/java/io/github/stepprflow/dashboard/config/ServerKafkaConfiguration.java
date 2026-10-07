@@ -51,6 +51,13 @@ public class ServerKafkaConfiguration {
         // Low latency settings for real-time monitoring
         config.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, 1);        // Don't wait for batch
         config.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, 100);    // Poll every 100ms max
+        // Refresh topic metadata every 30s (default is 5 min). The dashboard
+        // subscribes by topic PATTERN, and workflow topics — notably the
+        // per-workflow ".completed"/".retry" topics — are created lazily. With
+        // the default, a freshly-seen workflow (and its completion events) would
+        // not be picked up for up to 5 minutes, which defeats "real-time"
+        // monitoring. Matches the executor factory (KafkaBrokerAutoConfiguration).
+        config.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, 30000);
 
         JsonDeserializer<WorkflowMessage> deserializer = new JsonDeserializer<>(WorkflowMessage.class, objectMapper);
         deserializer.addTrustedPackages("io.github.stepprflow.core.model", "io.github.stepprflow.monitor.model");
