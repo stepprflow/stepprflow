@@ -102,19 +102,32 @@ public class StepExecutor {
                 stepId, message.getTotalSteps(), step.getLabel(),
                 topic, message.getExecutionId());
 
-        // Restore security context if present
-        String securityContext = message.getSecurityContext();
-        log.info("Security context in message: {}, propagator: {}",
-                securityContext != null ? "present" : "NULL",
-                securityContextPropagator.getClass().getSimpleName());
-        if (securityContext != null) {
-            securityContextPropagator.restore(securityContext);
-        }
-
         // Set the current step label on the message for monitoring
         message.setCurrentStepLabel(step.getLabel());
 
         try {
+            // Restore security context if present (SF-1: inside the try so that
+            // a restore failure is handled, not propagated, and clear() in the
+            // finally always runs — otherwise a throwing restore() escapes
+            // execute(), leaks the context onto the pooled consumer thread, and
+            // poison-pills the broker with endless redelivery).
+            String securityContext = message.getSecurityContext();
+            log.debug("Security context in message: {}, propagator: {}",
+                    securityContext != null ? "present" : "NULL",
+                    securityContextPropagator.getClass().getSimpleName());
+            if (securityContext != null) {
+                try {
+                    securityContextPropagator.restore(securityContext);
+                } catch (Exception restoreError) {
+                    // A restore failure (e.g. an expired/invalid propagated
+                    // credential) will not succeed on redelivery — the credential
+                    // is embedded in the message. Treat it as terminal: DLQ, never
+                    // retry. Returning here still runs the finally (clear()).
+                    handleRestoreFailure(message, step, definition, restoreError);
+                    return;
+                }
+            }
+
             // Deserialize payload
             Object payload = deserializePayload(message, step);
 
@@ -141,8 +154,15 @@ public class StepExecutor {
         } catch (Exception e) {
             handleFailure(message, step, definition, e);
         } finally {
-            // Always clear security context after execution
-            securityContextPropagator.clear();
+            // Always clear security context after execution. Guard it: if clear()
+            // itself threw, the exception would escape execute() and re-introduce
+            // the very poison-pill this method hardens against.
+            try {
+                securityContextPropagator.clear();
+            } catch (Exception clearError) {
+                log.error("Failed to clear security context after step for workflow {} [{}]",
+                        message.getTopic(), message.getExecutionId(), clearError);
+            }
         }
     }
 
@@ -233,7 +253,7 @@ public class StepExecutor {
             scheduleRetry(message, retryInfo, errorMessage);
         } else {
             // Send to DLQ
-            sendToDlq(message, step, cause);
+            sendToDlq(message, step, cause, "STEP_EXECUTION_FAILED");
 
             // Call failure callback
             if (definition.getOnFailureMethod() != null) {
@@ -243,6 +263,44 @@ public class StepExecutor {
                 } catch (Exception ex) {
                     log.error("Error in failure callback", ex);
                 }
+            }
+        }
+    }
+
+    /**
+     * Handle a security-context restore failure as a terminal, non-retryable
+     * error: route the message straight to the DLQ and fire the failure
+     * callback, bypassing the retry path.
+     *
+     * <p>A restore failure means the credential propagated inside the message
+     * cannot be re-established (typically expired/invalid). Redelivering the
+     * same message will fail identically, so retrying is pointless and would
+     * poison-pill the broker; the step must never execute without its intended
+     * security context.</p>
+     *
+     * @param message the workflow message
+     * @param step the step being executed
+     * @param definition the workflow definition
+     * @param cause the exception thrown by the propagator's restore()
+     */
+    private void handleRestoreFailure(
+            final WorkflowMessage message,
+            final StepDefinition step,
+            final WorkflowDefinition definition,
+            final Throwable cause) {
+        log.error("Security context restore failed for workflow {} [{}] at step {}/{} ({}); "
+                        + "handling as terminal, non-retryable failure (DLQ if enabled): {}",
+                message.getTopic(), message.getExecutionId(), step.getId(),
+                message.getTotalSteps(), step.getLabel(), cause.getMessage(), cause);
+
+        sendToDlq(message, step, cause, "SECURITY_CONTEXT_RESTORE_FAILED");
+
+        if (definition.getOnFailureMethod() != null) {
+            try {
+                callbackMethodInvoker.invokeRaw(definition.getOnFailureMethod(),
+                              definition.getHandler(), message, cause);
+            } catch (Exception ex) {
+                log.error("Error in failure callback", ex);
             }
         }
     }
@@ -290,13 +348,14 @@ public class StepExecutor {
     private void sendToDlq(
             final WorkflowMessage message,
             final StepDefinition step,
-            final Throwable cause) {
+            final Throwable cause,
+            final String errorCode) {
         if (!properties.getDlq().isEnabled()) {
             return;
         }
 
         ErrorInfo errorInfo = ErrorInfo.builder()
-                .code("STEP_EXECUTION_FAILED")
+                .code(errorCode)
                 .message(cause.getMessage())
                 .exceptionType(cause.getClass().getName())
                 .stackTrace(StackTraceUtils.truncate(cause))
