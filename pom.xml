@@ -57,6 +57,7 @@
         <module>stepprflow-core</module>
         <module>stepprflow-spring-kafka</module>
         <module>stepprflow-spring-rabbitmq</module>
+        <module>stepprflow-idempotency-redis</module>
         <module>stepprflow-monitoring</module>
     </modules>
 
@@ -218,6 +219,11 @@
             <dependency>
                 <groupId>io.github.stepprflow</groupId>
                 <artifactId>stepprflow-spring-rabbitmq</artifactId>
+                <version>${stepprflow.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.stepprflow</groupId>
+                <artifactId>stepprflow-idempotency-redis</artifactId>
                 <version>${stepprflow.version}</version>
             </dependency>
             <dependency>

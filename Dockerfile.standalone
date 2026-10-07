@@ -28,6 +28,7 @@ COPY pom.xml .
 COPY stepprflow-core/pom.xml stepprflow-core/
 COPY stepprflow-spring-kafka/pom.xml stepprflow-spring-kafka/
 COPY stepprflow-spring-rabbitmq/pom.xml stepprflow-spring-rabbitmq/
+COPY stepprflow-idempotency-redis/pom.xml stepprflow-idempotency-redis/
 COPY stepprflow-monitoring/pom.xml stepprflow-monitoring/
 
 # Download dependencies (cached layer)
@@ -37,6 +38,7 @@ RUN mvn dependency:go-offline -pl stepprflow-monitoring -am -q || true
 COPY stepprflow-core/src stepprflow-core/src
 COPY stepprflow-spring-kafka/src stepprflow-spring-kafka/src
 COPY stepprflow-spring-rabbitmq/src stepprflow-spring-rabbitmq/src
+COPY stepprflow-idempotency-redis/src stepprflow-idempotency-redis/src
 COPY stepprflow-monitoring/src stepprflow-monitoring/src
 
 # Copy checkstyle config
