@@ -8,7 +8,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Build the Vue.js UI
 # -----------------------------------------------------------------------------
-FROM node:22-alpine AS ui-builder
+FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS ui-builder
 
 WORKDIR /ui
 COPY stepprflow-ui/package.json stepprflow-ui/package-lock.json* ./
@@ -19,7 +19,7 @@ RUN npm run build
 # -----------------------------------------------------------------------------
 # Stage 2: Build the Spring Boot application (with UI in static/)
 # -----------------------------------------------------------------------------
-FROM maven:3.9-eclipse-temurin-21-alpine AS builder
+FROM maven:3.9-eclipse-temurin-21-alpine@sha256:308cba8b638ed7e4658cea3f8399066219466211c805f6d5728c3c9c7614661b AS builder
 
 WORKDIR /app
 
@@ -51,7 +51,7 @@ RUN mvn clean package -pl stepprflow-monitoring -am -DskipTests -q
 # -----------------------------------------------------------------------------
 # Stage 3: Extract Spring Boot layers
 # -----------------------------------------------------------------------------
-FROM eclipse-temurin:21-jdk-alpine AS layers
+FROM eclipse-temurin:21-jdk-alpine@sha256:0bfc69a4758a86710e5c474032d28400a8bd00874766f9e8b1642ac2fd293159 AS layers
 
 WORKDIR /app
 COPY --from=builder /app/stepprflow-monitoring/target/*.jar app.jar
@@ -60,7 +60,7 @@ RUN java -Djarmode=layertools -jar app.jar extract
 # -----------------------------------------------------------------------------
 # Stage 4: Final runtime — JRE (Ubuntu) + MongoDB 7.0
 # -----------------------------------------------------------------------------
-FROM eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:21-jre-jammy@sha256:f04fb34e053148344e83317976114ec3f37e4b830ec8bdab5a2fe3cecd7d010b
 
 LABEL maintainer="Steppr Flow Team"
 LABEL description="Steppr Flow Monitoring — standalone (App + UI + MongoDB)"

@@ -229,6 +229,35 @@ class StepExecutorSecurityTest {
         }
     }
 
+    @Nested
+    @DisplayName("SF-13: non-retryable matching walks the exception hierarchy")
+    class NonRetryableHierarchyTests {
+
+        @Test
+        @DisplayName("a subclass of a configured non-retryable exception is sent to the DLQ, not retried")
+        void subclassOfNonRetryableGoesToDlq() throws Exception {
+            Method method = TestWorkflow.class.getDeclaredMethod("nfeStep", Object.class);
+            StepDefinition step = StepDefinition.builder()
+                    .id(1).label("nfeStep").method(method).build();
+            WorkflowDefinition definition = createWorkflowDefinition(List.of(step));
+            when(registry.getDefinition("test-topic")).thenReturn(definition);
+
+            // IllegalArgumentException is configured non-retryable; the step throws
+            // its subclass NumberFormatException.
+            StepprFlowProperties.Retry retry = new StepprFlowProperties.Retry();
+            retry.setMaxAttempts(3);
+            retry.setNonRetryableExceptions(List.of("java.lang.IllegalArgumentException"));
+            when(properties.getRetry()).thenReturn(retry);
+            when(properties.getDlq()).thenReturn(new StepprFlowProperties.Dlq());
+
+            stepExecutor.execute(testMessage);
+
+            // Routed straight to the DLQ (non-retryable) — no retry message.
+            verify(messageBroker).sendSync(eq("test-topic.dlq"), any(WorkflowMessage.class));
+            verify(messageBroker, never()).sendSync(eq("test-topic"), any(WorkflowMessage.class));
+        }
+    }
+
     // Helper methods
     private StepDefinition createStepDefinition(int id, String methodName) throws Exception {
         Method method = TestWorkflow.class.getDeclaredMethod(methodName, Object.class);
@@ -279,6 +308,11 @@ class StepExecutorSecurityTest {
 
         public void failingStep(Object payload) {
             throw new RuntimeException("Failed");
+        }
+
+        public void nfeStep(Object payload) {
+            // NumberFormatException is a SUBCLASS of IllegalArgumentException.
+            throw new NumberFormatException("bad number");
         }
     }
 

@@ -25,6 +25,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -505,8 +506,22 @@ public class StepExecutor {
                 || cause instanceof ForgedSecurityContextException) {
             return false;
         }
-        String exceptionType = cause.getClass().getName();
-        return !properties.getRetry().getNonRetryableExceptions().contains(exceptionType);
+        // SF-13: match the configured non-retryable types against the whole
+        // exception hierarchy, not just the exact runtime class name, so that a
+        // subclass of a configured non-retryable exception (e.g. a
+        // NumberFormatException when IllegalArgumentException is listed) is also
+        // routed straight to the DLQ instead of being retried.
+        List<String> nonRetryable = properties.getRetry().getNonRetryableExceptions();
+        if (nonRetryable != null && !nonRetryable.isEmpty()) {
+            for (Class<?> type = cause.getClass();
+                    type != null && type != Object.class;
+                    type = type.getSuperclass()) {
+                if (nonRetryable.contains(type.getName())) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private void scheduleRetry(
