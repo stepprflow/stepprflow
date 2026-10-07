@@ -51,7 +51,7 @@ RUN java -Djarmode=layertools -jar app.jar extract
 # "Error loading shared library ld-linux-x86-64.so.2". On Alpine amd64 this
 # breaks every producer and prevents the dashboard from decompressing workflow
 # messages. See the Alpine/snappy incident; the fix is a glibc base.
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre@sha256:cff19e6215689161eb6162c11b86b0c60ddf802164f2eaf48d570f8fb79a36c5
 
 LABEL maintainer="Ali M'HIN <alimhin@gmail.com>"
 LABEL description="Steppr Flow Monitoring Dashboard"
