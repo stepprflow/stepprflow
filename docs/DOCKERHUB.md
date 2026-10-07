@@ -19,7 +19,7 @@ libraries on [Maven Central](https://central.sonatype.com/artifact/io.github.ste
 
 | Tag | Notes |
 |-----|-------|
-| `1.1.0` | The release version — one per release (`1.1.0`, then `1.2.0`, …) |
+| `1.1.0` | The release version — each release is published under its own version tag |
 | `latest` | Points to the most recent release |
 
 > For a reproducible deployment, pin by digest (`@sha256:…`) rather than a tag.
