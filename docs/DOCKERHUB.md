@@ -19,7 +19,7 @@ libraries on [Maven Central](https://central.sonatype.com/artifact/io.github.ste
 
 | Tag | Notes |
 |-----|-------|
-| `1.1.0`, `1.1`, `1` | Pinned release lines |
+| `1.1.0` (each `X.Y.Z`) | Exact, immutable release version |
 | `latest` | Most recent release |
 
 **Architectures:** `linux/amd64`, `linux/arm64`.

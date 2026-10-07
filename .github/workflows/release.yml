@@ -322,8 +322,6 @@ jobs:
           tags: |
             type=raw,value=latest
             type=raw,value=${{ needs.release.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.release.outputs.version }}
-            type=semver,pattern={{major}},value=${{ needs.release.outputs.version }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
