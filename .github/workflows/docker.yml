@@ -161,6 +161,20 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      kafka:
+        image: confluentinc/cp-kafka:7.5.0
+        ports:
+          - 9092:9092
+        env:
+          KAFKA_NODE_ID: 1
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
 
     steps:
       - name: Checkout code
@@ -173,29 +187,48 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull and test image
+      - name: Wait for Kafka
+        run: timeout 90 bash -c 'until nc -z localhost 9092; do sleep 2; done'
+
+      - name: Smoke-test the monitor image
         run: |
-          # Pull the image
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::7}
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::7}"
+          docker pull "$IMAGE"
 
-          # Run container with MongoDB
-          docker run -d \
-            --name stepprflow-test \
-            --network host \
-            -e SPRING_DATA_MONGODB_URI=mongodb://localhost:27017/stepprflow \
-            -e SPRING_KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
-            -e STEPPR_FLOW_MONITORING_ENABLED=false \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${GITHUB_SHA::7}
+          # Boot the monitor against the Mongo + Kafka service containers. A real
+          # auth mode is set so it is not fail-closed; reads/mutations still need a
+          # role, but /actuator/health is public.
+          docker run -d --name stepprflow-test --network host \
+            -e MONGODB_URI=mongodb://localhost:27017/stepprflow \
+            -e KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
+            -e STEPPRFLOW_MONITOR_AUTH_MODE=basic \
+            -e STEPPRFLOW_MONITOR_AUTH_BASIC_USERNAME=admin \
+            -e STEPPRFLOW_MONITOR_AUTH_BASIC_PASSWORD=admin \
+            -e STEPPRFLOW_MONITOR_AUTH_BASIC_ROLE=OPERATOR \
+            "$IMAGE"
 
-          # Wait for container to start
-          sleep 30
+          # Poll /actuator/health until UP (startup + Mongo + Kafka), up to ~150s.
+          ok=""
+          for i in $(seq 1 30); do
+            body=$(curl -s http://localhost:8090/actuator/health || true)
+            echo "attempt $i: $body"
+            if echo "$body" | grep -q '"status":"UP"'; then ok=1; break; fi
+            sleep 5
+          done
 
-          # Check health endpoint
-          curl --fail http://localhost:8090/actuator/health || exit 1
+          if [ -z "$ok" ]; then
+            echo "::error::monitor health never reached UP"
+            docker logs stepprflow-test | tail -80
+            exit 1
+          fi
 
-          # Cleanup
-          docker stop stepprflow-test
-          docker rm stepprflow-test
+          # The public auth-config endpoint must answer 200.
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8090/api/auth/config)
+          echo "GET /api/auth/config -> $code"
+          [ "$code" = "200" ] || { docker logs stepprflow-test | tail -80; exit 1; }
+
+          echo "Monitor image smoke test passed."
+          docker rm -f stepprflow-test
 
   # Update deployment (optional - triggered on release)
   notify:

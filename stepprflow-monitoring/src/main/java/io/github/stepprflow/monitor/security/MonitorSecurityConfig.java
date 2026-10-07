@@ -93,7 +93,12 @@ public class MonitorSecurityConfig {
                     + "(value: '{}') — denying ALL requests to the monitoring "
                     + "endpoints until it is configured.", mode);
             http.csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(a -> a.anyRequest().denyAll());
+                .authorizeHttpRequests(a -> a
+                    // Liveness/health stays reachable even when fail-closed, so
+                    // container HEALTHCHECKs and orchestrator probes can tell
+                    // "up but unconfigured" from "down". Everything else is denied.
+                    .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                    .anyRequest().denyAll());
             return http.build();
         }
 
