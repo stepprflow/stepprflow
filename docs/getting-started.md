@@ -35,7 +35,7 @@ Add the Steppr Flow starter to your `pom.xml`:
 
 ```xml
 <properties>
-    <stepprflow.version>1.0.0-SNAPSHOT</stepprflow.version>
+    <stepprflow.version>1.1.1</stepprflow.version>
 </properties>
 
 <dependencies>
@@ -493,8 +493,10 @@ public class OrderController {
 
         OrderPayload payload = buildPayload(request);
 
-        // Start with custom correlation ID
-        String executionId = workflowStarter.start("order-workflow", payload, correlationId);
+        // Start with a custom correlation id passed as workflow metadata.
+        // The 3-arg overload is start(topic, payload, Map<String,Object> metadata).
+        String executionId = workflowStarter.start(
+                "order-workflow", payload, Map.of("correlationId", correlationId));
 
         return ResponseEntity.accepted()
             .body(Map.of(
@@ -769,6 +771,10 @@ docker run -d \
   -p 8090:8090 \
   -e MONGODB_URI=mongodb://host.docker.internal:27017/stepprflow \
   -e KAFKA_BOOTSTRAP_SERVERS=host.docker.internal:9092 \
+  -e STEPPRFLOW_MONITOR_AUTH_MODE=basic \
+  -e STEPPRFLOW_MONITOR_AUTH_BASIC_USERNAME=admin \
+  -e STEPPRFLOW_MONITOR_AUTH_BASIC_PASSWORD=change-me \
+  -e STEPPRFLOW_MONITOR_AUTH_BASIC_ROLE=OPERATOR \
   stepprflow-monitoring
 ```
 

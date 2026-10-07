@@ -46,12 +46,12 @@ Steppr Flow enables you to build resilient, async multi-step workflows with supp
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-core</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.1</version>
 </dependency>
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-spring-kafka</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.1</version>
 </dependency>
 ```
 
@@ -60,12 +60,12 @@ Steppr Flow enables you to build resilient, async multi-step workflows with supp
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-core</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.1</version>
 </dependency>
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-spring-rabbitmq</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.1</version>
 </dependency>
 ```
 
@@ -74,7 +74,7 @@ Steppr Flow enables you to build resilient, async multi-step workflows with supp
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-monitoring</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.1</version>
 </dependency>
 ```
 

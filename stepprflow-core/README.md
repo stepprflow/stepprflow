@@ -21,7 +21,7 @@ Spring Boot framework for orchestrating asynchronous multi-step workflows via pl
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-core</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.1.1</version>
 </dependency>
 ```
 

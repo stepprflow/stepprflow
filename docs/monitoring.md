@@ -86,11 +86,20 @@ stepprflow:
       instance-timeout: 90s                    # Mark instances stale after 90 seconds
       cleanup-interval: 30s                    # Run cleanup every 30 seconds
 
-# MongoDB connection
-spring:
-  data:
+    # MongoDB connection — the monitor builds its OWN MongoClient from this
+    # property (NOT spring.data.mongodb.uri). The MONGODB_URI env var is
+    # accepted as a convenience alias.
     mongodb:
       uri: mongodb://localhost:27017/stepprflow
+
+    # Authentication (SF-5) — REQUIRED. With no mode set, the dashboard denies
+    # every request (fail-closed) except /actuator/health. Pick basic or oidc.
+    auth:
+      mode: basic                              # or: oidc
+      basic:
+        username: admin
+        password: "{bcrypt}$2a$10$..."         # bcrypt hash (plaintext accepted but logged as a warning)
+        role: OPERATOR                          # OPERATOR (can mutate) or VIEWER (read-only)
 ```
 
 ---
@@ -286,6 +295,11 @@ services:
     environment:
       - MONGODB_URI=mongodb://mongo:27017/stepprflow
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      # Authentication is REQUIRED — the dashboard is fail-closed without it.
+      - STEPPRFLOW_MONITOR_AUTH_MODE=basic
+      - STEPPRFLOW_MONITOR_AUTH_BASIC_USERNAME=admin
+      - STEPPRFLOW_MONITOR_AUTH_BASIC_PASSWORD=change-me
+      - STEPPRFLOW_MONITOR_AUTH_BASIC_ROLE=OPERATOR
     depends_on:
       - mongo
       - kafka
@@ -296,7 +310,11 @@ services:
 ```bash
 java -jar stepprflow-monitoring.jar \
   --stepprflow.monitor.mongodb.uri=mongodb://localhost:27017/stepprflow \
-  --stepprflow.kafka.bootstrap-servers=localhost:9092
+  --stepprflow.kafka.bootstrap-servers=localhost:9092 \
+  --stepprflow.monitor.auth.mode=basic \
+  --stepprflow.monitor.auth.basic.username=admin \
+  --stepprflow.monitor.auth.basic.password=change-me \
+  --stepprflow.monitor.auth.basic.role=OPERATOR
 ```
 
 ### Dashboard Configuration
@@ -305,12 +323,18 @@ java -jar stepprflow-monitoring.jar \
 server:
   port: 8090
 
-spring:
-  data:
+stepprflow:
+  monitor:
+    # The monitor reads its Mongo URI here, not from spring.data.mongodb.uri.
     mongodb:
       uri: mongodb://localhost:27017/stepprflow
-
-stepprflow:
+    # Authentication is REQUIRED — without a mode the dashboard is fail-closed.
+    auth:
+      mode: basic                              # or: oidc
+      basic:
+        username: admin
+        password: "{bcrypt}$2a$10$..."
+        role: OPERATOR
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
