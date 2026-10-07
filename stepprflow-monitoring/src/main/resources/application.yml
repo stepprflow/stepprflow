@@ -49,6 +49,25 @@ stepprflow:
     cleanup:
       enabled: true
       retention-days: 30
+    # SF-5 — authentication for the monitoring API, dashboard and WebSocket.
+    # No default is set on purpose: until a mode is chosen the security filter
+    # chain denies every request (fail-closed). Pick ONE mode per deployment:
+    #
+    # auth:
+    #   mode: basic            # local login against the user below
+    #   basic:
+    #     username: admin
+    #     password: "{bcrypt}$2a$10$...."   # bcrypt hash; plaintext is accepted but warned
+    #     role: OPERATOR       # OPERATOR (can mutate) or VIEWER (read-only)
+    #
+    # auth:
+    #   mode: oidc             # SSO via Keycloak/OIDC (configure the client below)
+    #   oidc:
+    #     roles-claim: roles
+    #     operator-role: stepprflow-operator
+    #     viewer-role: stepprflow-viewer
+    # For oidc mode also set spring.security.oauth2.client.registration.keycloak.*
+    # and spring.security.oauth2.client.provider.keycloak.issuer-uri.
 
   dashboard:
     title: Steppr Flow Monitoring

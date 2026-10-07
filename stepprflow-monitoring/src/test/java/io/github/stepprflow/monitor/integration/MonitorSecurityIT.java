@@ -1,0 +1,76 @@
+package io.github.stepprflow.monitor.integration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+/**
+ * SF-5: verifies the monitoring authorization model — public auth-config,
+ * authenticated reads, and OPERATOR-only mutations. The test profile runs in
+ * basic mode; {@code @WithMockUser} supplies the authorities.
+ */
+@SpringBootTest(classes = TestApplication.class)
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+@Testcontainers
+@DisplayName("Monitoring security (SF-5)")
+class MonitorSecurityIT extends MongoDBTestContainerConfig {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    @DisplayName("GET /api/auth/config is public")
+    void authConfigIsPublic() throws Exception {
+        mockMvc.perform(get("/api/auth/config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mode").value("basic"));
+    }
+
+    @Test
+    @DisplayName("GET /api/auth/me is 401 when unauthenticated")
+    void meRequiresAuth() throws Exception {
+        mockMvc.perform(get("/api/auth/me"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(username = "viewer", authorities = {"VIEWER"})
+    @DisplayName("VIEWER can read but cannot mutate")
+    void viewerReadOnly() throws Exception {
+        mockMvc.perform(get("/api/auth/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.operator").value(false));
+
+        mockMvc.perform(post("/api/circuit-breakers/some-cb/reset").with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "operator", authorities = {"OPERATOR"})
+    @DisplayName("OPERATOR can mutate")
+    void operatorCanMutate() throws Exception {
+        mockMvc.perform(get("/api/auth/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.operator").value(true));
+
+        // Authorized (not 401/403); the exact 2xx/4xx depends on the service,
+        // what matters for SF-5 is that OPERATOR is not blocked.
+        int statusCode = mockMvc.perform(post("/api/circuit-breakers/some-cb/reset").with(csrf()))
+                .andReturn().getResponse().getStatus();
+        assertThat(statusCode).isNotIn(401, 403);
+    }
+}

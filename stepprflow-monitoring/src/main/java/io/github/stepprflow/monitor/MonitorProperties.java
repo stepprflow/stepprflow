@@ -49,6 +49,62 @@ public class MonitorProperties {
      */
     private MongoDB mongodb = new MongoDB();
 
+    /**
+     * Authentication configuration for the monitoring API and dashboard (SF-5).
+     */
+    private Auth auth = new Auth();
+
+    /**
+     * Dual-mode authentication for the monitoring endpoints and UI.
+     * <p>
+     * {@code mode} selects {@code basic} (form/HTTP-Basic login against a
+     * configured user) or {@code oidc} (server-side OAuth2 login against a
+     * Keycloak/OIDC provider configured via the standard
+     * {@code spring.security.oauth2.client.*} properties). If {@code mode} is
+     * unset the security filter chain denies everything (fail-closed): the
+     * monitoring endpoints are never exposed unauthenticated.
+     * </p>
+     */
+    @Data
+    public static class Auth {
+        /** {@code basic} or {@code oidc}; null/blank denies all (fail-closed). */
+        private String mode;
+
+        /** Basic-mode (local user) configuration. */
+        private Basic basic = new Basic();
+
+        /** OIDC-mode role mapping configuration. */
+        private Oidc oidc = new Oidc();
+    }
+
+    @Data
+    public static class Basic {
+        /** Local admin username. */
+        private String username = "admin";
+
+        /**
+         * Local admin password. A bcrypt hash ({$2a$...}) is used as-is; any
+         * other value is treated as a plaintext password (logged as a warning).
+         * Required when {@code auth.mode=basic}.
+         */
+        private String password;
+
+        /** Authority granted to the local user: {@code OPERATOR} or {@code VIEWER}. */
+        private String role = "OPERATOR";
+    }
+
+    @Data
+    public static class Oidc {
+        /** Token claim holding the caller's role names. */
+        private String rolesClaim = "roles";
+
+        /** OIDC role name that maps to the OPERATOR authority. */
+        private String operatorRole = "stepprflow-operator";
+
+        /** OIDC role name that maps to the VIEWER authority. */
+        private String viewerRole = "stepprflow-viewer";
+    }
+
     @Data
     public static class WebSocket {
         private boolean enabled = true;
