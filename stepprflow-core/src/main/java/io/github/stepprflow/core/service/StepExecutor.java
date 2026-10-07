@@ -312,22 +312,22 @@ public class StepExecutor {
             final StepDefinition step,
             final Duration timeout) throws Exception {
         Future<?> future = stepTimeoutExecutor.submit(() -> {
-            boolean restored = false;
             try {
                 if (rawContext != null) {
                     securityContextPropagator.restore(rawContext);
-                    restored = true;
                 }
                 method.invoke(handler, payload);
                 return null;
             } finally {
-                if (restored) {
-                    try {
-                        securityContextPropagator.clear();
-                    } catch (Exception clearError) {
-                        log.error("Failed to clear security context on timeout worker "
-                                + "for step {} ({})", step.getId(), step.getLabel(), clearError);
-                    }
+                // SF-1/SF-6: clear UNCONDITIONALLY on the pooled worker (as the
+                // consumer thread's finally does), so even a partial or failed
+                // restore cannot leave a context on a reused worker. Clearing an
+                // unset context is a no-op; guard against clear() itself throwing.
+                try {
+                    securityContextPropagator.clear();
+                } catch (Exception clearError) {
+                    log.error("Failed to clear security context on timeout worker "
+                            + "for step {} ({})", step.getId(), step.getLabel(), clearError);
                 }
             }
         });
