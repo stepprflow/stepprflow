@@ -60,6 +60,7 @@ jobs:
               - 'stepprflow-core/**'
               - 'stepprflow-spring-kafka/**'
               - 'stepprflow-spring-rabbitmq/**'
+              - 'stepprflow-idempotency-redis/**'
               - 'stepprflow-monitoring/**'
               - 'pom.xml'
 
