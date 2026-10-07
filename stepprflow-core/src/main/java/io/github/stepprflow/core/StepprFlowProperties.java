@@ -405,14 +405,37 @@ public class StepprFlowProperties {
     @Data
     public static class Timeout {
         /**
-         * Enable timeout enforcement.
+         * Enable per-step timeout enforcement (SF-6).
+         * <p>
+         * When {@code false} (the default), a {@code @Timeout} on a step is
+         * only exported as registration/monitoring metadata and is NOT
+         * enforced at runtime — steps run unbounded. When {@code true}, each
+         * step with an effective timeout (its {@code @Timeout}, else
+         * {@link #defaultStepTimeout}) runs on a bounded worker pool and is
+         * cancelled with a {@code StepTimeoutException} (retryable) once the
+         * deadline passes. Cancellation is cooperative: a step that ignores
+         * thread interruption (e.g. a tight CPU loop or an uninterruptible
+         * native call) keeps running until it returns — design steps to honor
+         * interruption.
+         * </p>
          */
         private boolean enabled = false;
 
         /**
-         * Default timeout for steps without explicit timeout.
+         * Default timeout applied to steps that declare no {@code @Timeout},
+         * used only when {@link #enabled} is {@code true}. Set to {@code null}
+         * to leave un-annotated steps unbounded even when enforcement is on.
          */
         private Duration defaultStepTimeout = Duration.ofMinutes(5);
+
+        /**
+         * Size of the bounded worker pool used to run steps under a timeout
+         * (only created when {@link #enabled} is {@code true}). It caps the
+         * number of steps that can run concurrently under enforcement; a step
+         * stuck in uninterruptible code holds its worker until it returns, so
+         * size this with the consumer concurrency in mind.
+         */
+        private int poolSize = 10;
     }
 
 }
