@@ -5,6 +5,7 @@ import io.github.stepprflow.core.StepprFlowProperties;
 import io.github.stepprflow.core.broker.MessageBroker;
 import io.github.stepprflow.core.security.TrustedPackagesValidator;
 import io.github.stepprflow.core.model.WorkflowMessage;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -42,6 +43,7 @@ import java.util.Map;
 @ConditionalOnClass(KafkaTemplate.class)
 @ConditionalOnProperty(name = "stepprflow.broker", havingValue = "kafka", matchIfMissing = true)
 @EnableConfigurationProperties(StepprFlowProperties.class)
+@Slf4j
 public class KafkaBrokerAutoConfiguration {
 
     @Bean
@@ -110,7 +112,29 @@ public class KafkaBrokerAutoConfiguration {
 
         deserializer.setUseTypeHeaders(false);
 
+        warnIfWildcardTopicPattern(properties.getKafka().getTopicPattern());
+
         return new DefaultKafkaConsumerFactory<>(config, new StringDeserializer(), deserializer);
+    }
+
+    /**
+     * SF-20: the default topic pattern {@code ".*"} subscribes to every topic
+     * on the cluster. On a shared cluster this makes the service fetch and
+     * deserialize unrelated services' messages; only the runtime guard in the
+     * listener keeps them from being processed. Emit a loud startup warning so
+     * the dangerous default is never silent — deployments on a shared cluster
+     * should scope {@code stepprflow.kafka.topic-pattern} to their own topics.
+     *
+     * @param topicPattern the configured topic pattern
+     */
+    static void warnIfWildcardTopicPattern(final String topicPattern) {
+        if (".*".equals(topicPattern)) {
+            log.warn("stepprflow.kafka.topic-pattern is left at the default \".*\": "
+                    + "this subscribes to EVERY topic on the Kafka cluster. On a shared "
+                    + "cluster, scope it to your own workflow topics (e.g. "
+                    + "\"myservice\\..*\") to avoid fetching and deserializing unrelated "
+                    + "traffic.");
+        }
     }
 
     @Bean

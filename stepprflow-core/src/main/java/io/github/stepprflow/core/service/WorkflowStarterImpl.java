@@ -70,14 +70,23 @@ public class WorkflowStarterImpl implements WorkflowStarter {
             final String topic,
             final Object payload,
             final Map<String, Object> metadata) {
+        // Capture on the caller's thread so the current security context is used.
+        return doStart(topic, payload, metadata, securityContextPropagator.capture());
+    }
+
+    private String doStart(
+            final String topic,
+            final Object payload,
+            final Map<String, Object> metadata,
+            final String rawSecurityContext) {
         WorkflowDefinition definition = registry.getDefinition(topic);
 
         String executionId = UUID.randomUUID().toString();
 
-        // Capture security context from current thread, then sign it (bound to
-        // this execution/topic) so its integrity can be verified on restore.
-        String securityContext = securityContextPropagator.capture();
-        securityContext = securityContextSigner.wrap(executionId, topic, securityContext);
+        // Sign the captured context (bound to this execution/topic) so its
+        // integrity can be verified on restore.
+        String securityContext =
+                securityContextSigner.wrap(executionId, topic, rawSecurityContext);
         log.debug("Captured security context: {}", securityContext != null ? "present" : "null");
 
         int totalSteps = 0;
@@ -117,7 +126,12 @@ public class WorkflowStarterImpl implements WorkflowStarter {
     public CompletableFuture<String> startAsync(
             final String topic,
             final Object payload) {
-        return CompletableFuture.supplyAsync(() -> start(topic, payload));
+        // SF-11: capture the security context on the CALLER's thread. The async
+        // worker thread does not carry the caller's SecurityContext, so capturing
+        // inside the async task would capture an empty/foreign context.
+        final String capturedContext = securityContextPropagator.capture();
+        return CompletableFuture.supplyAsync(
+                () -> doStart(topic, payload, null, capturedContext));
     }
 
     @Override
