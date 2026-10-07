@@ -326,6 +326,19 @@ jobs:
       - name: Install project (required for analysis)
         run: mvn -B install -DskipTests --file pom.xml
 
+      # The OWASP NVD database (all CVEs) lives in the dependency-check data
+      # directory. Without this cache it is re-synced from scratch on every run,
+      # which dominates the job (10-15 min). Restore the latest cached copy and
+      # save a fresh one per run (unique key + prefix restore-keys), so a run
+      # only fetches the NVD deltas since the last one (seconds, with the API key).
+      - name: Cache OWASP NVD database
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: owasp-nvd-${{ github.run_id }}
+          restore-keys: |
+            owasp-nvd-
+
       - name: OWASP Dependency Check
         run: mvn -B org.owasp:dependency-check-maven:check --file pom.xml -DnvdApiKey=${{ secrets.NVD_API_KEY }}
         continue-on-error: true
@@ -344,7 +357,11 @@ jobs:
   ci-status:
     name: CI Status
     runs-on: ubuntu-latest
-    needs: [detect-changes, build, frontend, code-quality, integration-tests-kafka, integration-tests-rabbitmq, security]
+    # 'security' is intentionally NOT a dependency: OWASP Dependency Check is
+    # continue-on-error and its result is not evaluated below, so gating CI on
+    # its completion only delayed the status check by the scan's runtime. It
+    # still runs in parallel and uploads its report.
+    needs: [detect-changes, build, frontend, code-quality, integration-tests-kafka, integration-tests-rabbitmq]
     if: always()
 
     steps:
