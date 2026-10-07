@@ -104,6 +104,20 @@ class CallbackMethodInvokerTest {
         }
 
         @Test
+        @DisplayName("SF-27: a Throwable param on the success path receives null, not a mis-injected payload")
+        void shouldInvokeThrowableParamWithNullOnSuccess() throws Exception {
+            Method method = TestCallbackHandler.class.getDeclaredMethod("onFailureWithError", Throwable.class);
+
+            // error == null (success path). Previously this fell through and
+            // passed the Map payload to a Throwable parameter -> ClassCastException.
+            invoker.invoke(method, handler, testMessage, null);
+
+            assertThat(handler.onFailureWithErrorCalled).isTrue();
+            assertThat(handler.errorReceived).isNull();
+            assertThat(handler.payloadReceived).isNull();
+        }
+
+        @Test
         @DisplayName("Should prefer Throwable over payload when error is provided")
         void shouldPreferThrowableOverPayload() throws Exception {
             Method method = TestCallbackHandler.class.getDeclaredMethod("onFailureWithError", Throwable.class);
@@ -236,6 +250,7 @@ class CallbackMethodInvokerTest {
         boolean noArgsCalled = false;
         WorkflowMessage messageReceived = null;
         Throwable errorReceived = null;
+        boolean onFailureWithErrorCalled = false;
         Object payloadReceived = null;
         String stringReceived = null;
         boolean unsupportedCalled = false;
@@ -249,6 +264,7 @@ class CallbackMethodInvokerTest {
         }
 
         public void onFailureWithError(Throwable error) {
+            onFailureWithErrorCalled = true;
             errorReceived = error;
         }
 

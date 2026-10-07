@@ -5,11 +5,13 @@ server:
 stepprflow:
   broker: rabbitmq
   rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
-    virtual-host: /
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    # SF-28: overridable via env; the guest/guest fallback is the local-dev
+    # RabbitMQ default and must never be used outside a local sample run.
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: ${RABBITMQ_VHOST:/}
     exchange: stepprflow.workflows
     prefetch-count: 10
     trusted-packages:

@@ -85,7 +85,11 @@ public class CallbackMethodInvoker {
             final boolean deserialize) throws Exception {
         if (WorkflowMessage.class.isAssignableFrom(paramType)) {
             method.invoke(handler, message);
-        } else if (Throwable.class.isAssignableFrom(paramType) && error != null) {
+        } else if (Throwable.class.isAssignableFrom(paramType)) {
+            // SF-27: a Throwable parameter always receives the error — which is
+            // null on the success path. Previously the `error != null` guard made
+            // a success callback declaring a Throwable fall through and get the
+            // payload mis-injected (ClassCastException at invoke time).
             method.invoke(handler, error);
         } else {
             // Assume it's the payload type

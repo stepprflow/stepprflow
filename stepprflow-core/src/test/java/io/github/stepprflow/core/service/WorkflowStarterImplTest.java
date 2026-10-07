@@ -287,6 +287,35 @@ class WorkflowStarterImplTest {
         }
     }
 
+    @Nested
+    @DisplayName("SF-25: null payload")
+    class NullPayloadTests {
+
+        @Test
+        @DisplayName("start() with a null payload does not NPE and sets a null payloadType")
+        void startWithNullPayloadDoesNotThrow() {
+            when(registry.getDefinition("test-topic")).thenReturn(testDefinition);
+
+            String executionId = workflowStarter.start("test-topic", null);
+
+            assertThat(executionId).isNotNull();
+            verify(messageBroker).send(eq("test-topic"), messageCaptor.capture());
+            WorkflowMessage message = messageCaptor.getValue();
+            assertThat(message.getPayload()).isNull();
+            assertThat(message.getPayloadType()).isNull();
+        }
+
+        @Test
+        @DisplayName("forward() with a null payload does not NPE")
+        void forwardWithNullPayloadDoesNotThrow() {
+            String executionId = workflowStarter.forward("remote-topic", null);
+
+            assertThat(executionId).isNotNull();
+            verify(messageBroker).send(eq("remote-topic"), messageCaptor.capture());
+            assertThat(messageCaptor.getValue().getPayloadType()).isNull();
+        }
+    }
+
     // Test payload class
     record TestPayload(String data) {
     }
