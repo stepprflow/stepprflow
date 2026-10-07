@@ -63,6 +63,26 @@ jobs:
           gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
           gpg-passphrase: GPG_PASSPHRASE
 
+      # Pin Maven 3.9.x: under Maven 3.10 the central-publishing plugin bundles
+      # stray staging files (maven-metadata-local.xml, _remote.repositories) that
+      # Sonatype Central rejects as "content that does NOT have a .pom file".
+      # The runner default drifted to 3.10, which is why a previously-working
+      # release now fails. SHA-512 verified against Apache's published checksum.
+      - name: Pin Maven 3.9.16
+        run: |
+          set -euo pipefail
+          MVNV=3.9.16
+          BASE="https://archive.apache.org/dist/maven/maven-3/${MVNV}/binaries"
+          cd /tmp
+          curl -fsSL -o apache-maven.tgz "${BASE}/apache-maven-${MVNV}-bin.tar.gz"
+          curl -fsSL -o apache-maven.tgz.sha512 "${BASE}/apache-maven-${MVNV}-bin.tar.gz.sha512"
+          echo "$(cat apache-maven.tgz.sha512)  apache-maven.tgz" | sha512sum -c -
+          tar xzf apache-maven.tgz
+          echo "/tmp/apache-maven-${MVNV}/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Maven version
+        run: mvn --version
+
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
