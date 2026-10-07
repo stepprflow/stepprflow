@@ -172,7 +172,13 @@ public class StepExecutor {
                 if (nextStep != null) {
                     nextMessage.setCurrentStepLabel(nextStep.getLabel());
                 }
-                messageBroker.send(topic, nextMessage);
+                // SF-4: confirmed send. All workflow-critical production
+                // (advance/retry/complete/DLQ) uses sendSync so a broker failure
+                // throws out of execute() and the consumed message is NOT acked
+                // (it gets redelivered) instead of being silently lost. The
+                // listener acks only after this returns, i.e. after the produced
+                // message is durably persisted.
+                messageBroker.sendSync(topic, nextMessage);
                 log.info("Advanced to step {}/{} for workflow {} [{}]",
                         nextMessage.getCurrentStep(), message.getTotalSteps(),
                         topic, message.getExecutionId());
@@ -247,7 +253,7 @@ public class StepExecutor {
 
         // Send completion message with updated payload
         WorkflowMessage completedMessage = messageWithPayload.complete();
-        messageBroker.send(message.getTopic() + ".completed", completedMessage);
+        messageBroker.sendSync(message.getTopic() + ".completed", completedMessage);
     }
 
     private void handleFailure(
@@ -267,7 +273,7 @@ public class StepExecutor {
         if (step.isContinueOnFailure() && !definition.isLastStep(step.getId())) {
             log.info("Continuing to next step despite failure (continueOnFailure=true)");
             WorkflowMessage nextMessage = message.nextStep();
-            messageBroker.send(message.getTopic(), nextMessage);
+            messageBroker.sendSync(message.getTopic(), nextMessage);
             return;
         }
 
@@ -380,7 +386,7 @@ public class StepExecutor {
 
         // In core module, we just send to retry topic
         // The monitor module handles the scheduled retry
-        messageBroker.send(message.getTopic() + ".retry", retryMessage);
+        messageBroker.sendSync(message.getTopic() + ".retry", retryMessage);
     }
 
     private void sendToDlq(
@@ -420,7 +426,7 @@ public class StepExecutor {
                 .build();
 
         String dlqTopic = message.getTopic() + properties.getDlq().getSuffix();
-        messageBroker.send(dlqTopic, dlqMessage);
+        messageBroker.sendSync(dlqTopic, dlqMessage);
 
         log.info("Sent workflow {} [{}] to DLQ: {}",
                  message.getTopic(), message.getExecutionId(), dlqTopic);

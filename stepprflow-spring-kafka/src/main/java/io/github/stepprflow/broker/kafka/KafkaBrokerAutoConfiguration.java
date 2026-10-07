@@ -18,6 +18,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.util.backoff.FixedBackOff;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaAdmin;
@@ -123,6 +125,15 @@ public class KafkaBrokerAutoConfiguration {
         factory.setConcurrency(properties.getKafka().getConsumer().getConcurrency());
         factory.getContainerProperties().setAckMode(
                 org.springframework.kafka.listener.ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+
+        // SF-4: on an un-acked (failed) record, seek back and redeliver with a
+        // bounded backoff, retrying indefinitely until processing succeeds.
+        // Infra failures (e.g. broker unreachable so a confirmed send threw)
+        // must not be skipped — the record is acked only on success, so no
+        // message is silently lost. Poison messages do not loop here: they are
+        // routed to the DLQ inside StepExecutor, after which the record is acked.
+        factory.setCommonErrorHandler(new DefaultErrorHandler(
+                new FixedBackOff(5000L, FixedBackOff.UNLIMITED_ATTEMPTS)));
 
         return factory;
     }

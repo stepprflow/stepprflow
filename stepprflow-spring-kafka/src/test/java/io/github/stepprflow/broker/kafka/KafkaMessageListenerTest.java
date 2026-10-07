@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -156,17 +157,20 @@ class KafkaMessageListenerTest {
         }
 
         @Test
-        @DisplayName("Should not acknowledge when executor throws exception")
-        void shouldNotAcknowledgeOnException() {
+        @DisplayName("Should rethrow and not acknowledge when executor throws exception")
+        void shouldRethrowAndNotAcknowledgeOnException() {
             // Given
             WorkflowMessage message = createMessage(WorkflowStatus.PENDING);
             ConsumerRecord<String, WorkflowMessage> record = createRecord(message);
-            doThrow(new RuntimeException("Processing failed")).when(stepExecutor).execute(message);
+            RuntimeException boom = new RuntimeException("Processing failed");
+            doThrow(boom).when(stepExecutor).execute(message);
 
-            // When
-            listener.onMessage(record, acknowledgment);
+            // When / Then — SF-4: the listener rethrows so the container's error
+            // handler seeks back and redelivers; the record is NOT acknowledged,
+            // so the message cannot be silently lost.
+            assertThatThrownBy(() -> listener.onMessage(record, acknowledgment))
+                    .isSameAs(boom);
 
-            // Then
             verify(stepExecutor).execute(message);
             verify(acknowledgment, never()).acknowledge();
         }

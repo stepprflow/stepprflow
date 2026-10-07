@@ -75,8 +75,14 @@ public class KafkaMessageListener {
                 stepExecutor.execute(message);
                 ack.acknowledge();
             } catch (Exception e) {
-                log.error("Error processing message: {}", e.getMessage(), e);
-                // Don't acknowledge - message will be redelivered
+                // SF-4: do NOT acknowledge, and rethrow so the container's error
+                // handler seeks back and redelivers this record (bounded backoff,
+                // retried until it succeeds). Swallowing the exception here left
+                // the un-acked offset to be reprocessed only on restart/rebalance,
+                // so a failed step-advance could be silently lost.
+                log.error("Error processing message on topic {} [{}]: {}",
+                        record.topic(), message.getExecutionId(), e.getMessage(), e);
+                throw e;
             }
         } else {
             log.debug("Skipping message with status {}", message.getStatus());
