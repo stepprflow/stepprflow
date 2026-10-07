@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.stepprflow.core.StepprFlowProperties;
 import io.github.stepprflow.core.broker.MessageBroker;
 import io.github.stepprflow.core.model.*;
+import io.github.stepprflow.core.security.ForgedSecurityContextException;
 import io.github.stepprflow.core.security.SecurityContextPropagator;
+import io.github.stepprflow.core.security.SecurityContextSigner;
 import io.github.stepprflow.core.security.TrustedClassResolver;
 import io.github.stepprflow.core.security.UntrustedPayloadTypeException;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +61,9 @@ class StepExecutorTest {
     @Mock
     private TrustedClassResolver trustedClassResolver;
 
+    @Mock
+    private SecurityContextSigner securityContextSigner;
+
     @InjectMocks
     private StepExecutor stepExecutor;
 
@@ -88,6 +93,11 @@ class StepExecutorTest {
                 .payload(Map.of("key", "value"))
                 .createdAt(Instant.now())
                 .build();
+
+        // By default the signer is a pass-through (signing disabled): it returns
+        // the stored context unchanged so restore() sees the original value.
+        lenient().when(securityContextSigner.unwrapAndVerify(any(), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(2));
     }
 
     @Nested
@@ -659,6 +669,45 @@ class StepExecutorTest {
             // Terminal, non-retryable: straight to DLQ, step never runs, no retry.
             verify(messageBroker).send(eq("test-topic.dlq"), any(WorkflowMessage.class));
             verify(messageBroker, never()).send(eq("test-topic.retry"), any());
+            assertThat(testWorkflow.step1Called).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("security context integrity (SF-3)")
+    class SecurityContextIntegrityTests {
+
+        private StepprFlowProperties.Dlq dlqConfig;
+
+        @BeforeEach
+        void setUpDlq() {
+            dlqConfig = new StepprFlowProperties.Dlq();
+            dlqConfig.setEnabled(true);
+            dlqConfig.setSuffix(".dlq");
+        }
+
+        @Test
+        @DisplayName("Should DLQ (not retry, not restore, not execute) when the context signature is invalid")
+        void shouldDlqWhenContextForged() throws Exception {
+            when(properties.getDlq()).thenReturn(dlqConfig);
+            testMessage = testMessage.toBuilder()
+                    .securityContext("forged.context")
+                    .build();
+
+            StepDefinition step1 = createStepDefinition(1, "step1");
+            testDefinition = createWorkflowDefinition(List.of(step1));
+            when(registry.getDefinition("test-topic")).thenReturn(testDefinition);
+
+            // The signer rejects the tampered/forged envelope before restore.
+            when(securityContextSigner.unwrapAndVerify(any(), any(), eq("forged.context")))
+                    .thenThrow(new ForgedSecurityContextException(
+                            "exec-123", "signature mismatch"));
+
+            stepExecutor.execute(testMessage);
+
+            verify(messageBroker).send(eq("test-topic.dlq"), any(WorkflowMessage.class));
+            verify(messageBroker, never()).send(eq("test-topic.retry"), any());
+            verify(securityContextPropagator, never()).restore(any());
             assertThat(testWorkflow.step1Called).isFalse();
         }
     }

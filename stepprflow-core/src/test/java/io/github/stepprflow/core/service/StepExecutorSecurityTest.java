@@ -8,6 +8,7 @@ import io.github.stepprflow.core.model.WorkflowDefinition;
 import io.github.stepprflow.core.model.WorkflowMessage;
 import io.github.stepprflow.core.model.WorkflowStatus;
 import io.github.stepprflow.core.security.SecurityContextPropagator;
+import io.github.stepprflow.core.security.SecurityContextSigner;
 import io.github.stepprflow.core.security.TrustedClassResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -62,6 +63,10 @@ class StepExecutorSecurityTest {
 
     @BeforeEach
     void setUp() {
+        // Real signer with no secret -> signing disabled -> pass-through, so
+        // restore() receives the raw context as before.
+        SecurityContextSigner signer =
+                new SecurityContextSigner(new StepprFlowProperties());
         stepExecutor = new StepExecutor(
                 registry,
                 messageBroker,
@@ -70,7 +75,8 @@ class StepExecutorSecurityTest {
                 backoffCalculator,
                 callbackMethodInvoker,
                 securityContextPropagator,
-                trustedClassResolver
+                trustedClassResolver,
+                signer
         );
 
         testWorkflow = new TestWorkflow();

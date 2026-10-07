@@ -1,10 +1,12 @@
 package io.github.stepprflow.core.service;
 
+import io.github.stepprflow.core.StepprFlowProperties;
 import io.github.stepprflow.core.broker.MessageBroker;
 import io.github.stepprflow.core.model.StepDefinition;
 import io.github.stepprflow.core.model.WorkflowDefinition;
 import io.github.stepprflow.core.model.WorkflowMessage;
 import io.github.stepprflow.core.security.SecurityContextPropagator;
+import io.github.stepprflow.core.security.SecurityContextSigner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -49,6 +51,7 @@ class WorkflowStarterImplSecurityTest {
                 registry,
                 messageBroker,
                 securityContextPropagator,
+                new SecurityContextSigner(new StepprFlowProperties()),
                 "test-service"
         );
 

@@ -255,6 +255,31 @@ public class StepprFlowProperties {
          * Header name for access token.
          */
         private String tokenHeader = "Authorization";
+
+        /**
+         * HMAC signing of the propagated security context.
+         */
+        private ContextSigning contextSigning = new ContextSigning();
+    }
+
+    /**
+     * HMAC signing of the propagated security context envelope.
+     * <p>
+     * When a {@code secret} is configured, stepprflow signs the captured
+     * security context (bound to the workflow executionId and topic) and
+     * verifies the signature before restoring it, rejecting any forged or
+     * replayed context. When no secret is set, signing is disabled and the
+     * context travels unprotected (a warning is emitted the first time one is
+     * propagated) — set a secret to enable integrity protection.
+     * </p>
+     */
+    @Data
+    public static class ContextSigning {
+        /**
+         * Shared HMAC-SHA256 secret, distributed to every service that
+         * participates in the same workflows. Blank/null disables signing.
+         */
+        private String secret;
     }
 
     /**
