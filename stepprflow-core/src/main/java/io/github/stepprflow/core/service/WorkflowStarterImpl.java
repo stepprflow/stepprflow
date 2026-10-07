@@ -110,7 +110,7 @@ public class WorkflowStarterImpl implements WorkflowStarter {
                 .currentStepLabel(firstStepLabel)
                 .status(WorkflowStatus.PENDING)
                 .payload(payload)
-                .payloadType(payload.getClass().getName())
+                .payloadType(payload != null ? payload.getClass().getName() : null)
                 .securityContext(securityContext)
                 .metadata(metadata)
                 .build();
@@ -167,7 +167,7 @@ public class WorkflowStarterImpl implements WorkflowStarter {
                 .currentStepLabel(firstStepLabel)
                 .status(WorkflowStatus.PENDING)
                 .payload(payload)
-                .payloadType(payload.getClass().getName())
+                .payloadType(payload != null ? payload.getClass().getName() : null)
                 .securityContext(securityContext)
                 .build();
 
@@ -215,7 +215,7 @@ public class WorkflowStarterImpl implements WorkflowStarter {
                 .totalSteps(0) // Unknown for remote workflows
                 .status(WorkflowStatus.PENDING)
                 .payload(payload)
-                .payloadType(payload.getClass().getName())
+                .payloadType(payload != null ? payload.getClass().getName() : null)
                 .securityContext(securityContext)
                 .metadata(metadata)
                 .build();
