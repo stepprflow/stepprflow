@@ -78,6 +78,11 @@ public class StepprFlowProperties {
     private Timeout timeout = new Timeout();
 
     /**
+     * Idempotency / de-duplication configuration.
+     */
+    private Idempotency idempotency = new Idempotency();
+
+    /**
      * Supported broker types.
      */
     public enum BrokerType {
@@ -436,6 +441,44 @@ public class StepprFlowProperties {
          * size this with the consumer concurrency in mind.
          */
         private int poolSize = 10;
+    }
+
+    /**
+     * Best-effort step de-duplication (SF-8). Disabled by default: a step may
+     * then run more than once on redelivery (at-least-once). When enabled, a
+     * step already recorded as processed is skipped and acknowledged.
+     */
+    @Data
+    public static class Idempotency {
+        /**
+         * Enable de-duplication. When {@code false} (default), no store is
+         * consulted and steps run exactly as before.
+         */
+        private boolean enabled = false;
+
+        /**
+         * Which store backs de-duplication: {@code inmemory} (per-instance,
+         * core default) or {@code redis} (distributed, provided by
+         * {@code stepprflow-idempotency-redis}).
+         */
+        private String store = "inmemory";
+
+        /**
+         * How long a processed key is remembered. Must exceed the broker's
+         * redelivery/retry window, otherwise a late redelivery is re-processed.
+         */
+        private Duration ttl = Duration.ofHours(24);
+
+        /**
+         * Maximum number of keys retained by the in-memory store (LRU beyond
+         * this). Ignored by distributed stores.
+         */
+        private int inMemoryMaxSize = 100_000;
+
+        /**
+         * Key prefix used by distributed stores (e.g. Redis) to namespace keys.
+         */
+        private String keyPrefix = "stepprflow:idem:";
     }
 
 }

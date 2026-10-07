@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import io.github.stepprflow.core.idempotency.IdempotencyStore;
+import io.github.stepprflow.core.idempotency.InMemoryIdempotencyStore;
 import io.github.stepprflow.core.security.NoOpSecurityContextPropagator;
 import io.github.stepprflow.core.security.SecurityContextPropagator;
 import io.github.stepprflow.core.service.StepExecutor;
@@ -44,6 +46,23 @@ public class StepprFlowAutoConfiguration {
     @ConditionalOnMissingBean(SecurityContextPropagator.class)
     public SecurityContextPropagator securityContextPropagator() {
         return new NoOpSecurityContextPropagator();
+    }
+
+    /**
+     * SF-8: default in-memory de-duplication store. A distributed store (e.g.
+     * {@code stepprflow-idempotency-redis}) replaces it by defining its own
+     * {@link IdempotencyStore} bean. The store is always present so the executor
+     * can inject it; it is only consulted when
+     * {@code stepprflow.idempotency.enabled=true}.
+     *
+     * @param properties the stepprflow properties
+     * @return the default in-memory idempotency store
+     */
+    @Bean
+    @ConditionalOnMissingBean(IdempotencyStore.class)
+    public IdempotencyStore idempotencyStore(final StepprFlowProperties properties) {
+        StepprFlowProperties.Idempotency cfg = properties.getIdempotency();
+        return new InMemoryIdempotencyStore(cfg.getTtl(), cfg.getInMemoryMaxSize());
     }
 
     /**

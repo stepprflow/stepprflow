@@ -14,10 +14,13 @@ import io.github.stepprflow.core.security.SecurityContextPropagator;
 import io.github.stepprflow.core.security.SecurityContextSigner;
 import io.github.stepprflow.core.security.TrustedClassResolver;
 import io.github.stepprflow.core.exception.StepTimeoutException;
+import io.github.stepprflow.core.idempotency.IdempotencyKey;
+import io.github.stepprflow.core.idempotency.IdempotencyStore;
 import io.github.stepprflow.core.security.UntrustedPayloadTypeException;
 import io.github.stepprflow.core.util.StackTraceUtils;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -79,7 +82,58 @@ public class StepExecutor {
     private final ExecutorService stepTimeoutExecutor;
 
     /**
+     * SF-8: best-effort de-duplication store. May be null (feature off / no
+     * bean), in which case no de-duplication is performed.
+     */
+    private final IdempotencyStore idempotencyStore;
+
+    /**
      * Constructor with qualified ObjectMapper.
+     *
+     * @param registry the workflow registry
+     * @param messageBroker the message broker
+     * @param properties the stepprflow properties
+     * @param objectMapper the stepprflow object mapper
+     * @param backoffCalculator the backoff calculator
+     * @param callbackMethodInvoker the callback method invoker
+     * @param securityContextPropagator the security context propagator
+     * @param trustedClassResolver resolves a payloadType only if its package is trusted
+     * @param securityContextSigner verifies the integrity of a propagated security context
+     * @param idempotencyStore the de-duplication store, or null when disabled
+     */
+    @Autowired
+    public StepExecutor(
+            final WorkflowRegistry registry,
+            final MessageBroker messageBroker,
+            final StepprFlowProperties properties,
+            @Qualifier("stepprflowObjectMapper") final ObjectMapper objectMapper,
+            final BackoffCalculator backoffCalculator,
+            final CallbackMethodInvoker callbackMethodInvoker,
+            final SecurityContextPropagator securityContextPropagator,
+            final TrustedClassResolver trustedClassResolver,
+            final SecurityContextSigner securityContextSigner,
+            final IdempotencyStore idempotencyStore) {
+        this.registry = registry;
+        this.messageBroker = messageBroker;
+        this.properties = properties;
+        this.objectMapper = objectMapper;
+        this.backoffCalculator = backoffCalculator;
+        this.callbackMethodInvoker = callbackMethodInvoker;
+        this.securityContextPropagator = securityContextPropagator;
+        this.trustedClassResolver = trustedClassResolver;
+        this.securityContextSigner = securityContextSigner;
+        this.idempotencyStore = idempotencyStore;
+        // getTimeout() is always a populated Timeout on a real bean; tolerate a
+        // null here only so a bare mocked properties doesn't NPE at construction.
+        StepprFlowProperties.Timeout timeoutCfg = properties.getTimeout();
+        this.stepTimeoutExecutor = (timeoutCfg != null && timeoutCfg.isEnabled())
+                ? createTimeoutExecutor(timeoutCfg.getPoolSize())
+                : null;
+    }
+
+    /**
+     * Backwards-compatible constructor without a de-duplication store (SF-8
+     * disabled). Kept so existing callers and tests compile unchanged.
      *
      * @param registry the workflow registry
      * @param messageBroker the message broker
@@ -101,21 +155,9 @@ public class StepExecutor {
             final SecurityContextPropagator securityContextPropagator,
             final TrustedClassResolver trustedClassResolver,
             final SecurityContextSigner securityContextSigner) {
-        this.registry = registry;
-        this.messageBroker = messageBroker;
-        this.properties = properties;
-        this.objectMapper = objectMapper;
-        this.backoffCalculator = backoffCalculator;
-        this.callbackMethodInvoker = callbackMethodInvoker;
-        this.securityContextPropagator = securityContextPropagator;
-        this.trustedClassResolver = trustedClassResolver;
-        this.securityContextSigner = securityContextSigner;
-        // getTimeout() is always a populated Timeout on a real bean; tolerate a
-        // null here only so a bare mocked properties doesn't NPE at construction.
-        StepprFlowProperties.Timeout timeoutCfg = properties.getTimeout();
-        this.stepTimeoutExecutor = (timeoutCfg != null && timeoutCfg.isEnabled())
-                ? createTimeoutExecutor(timeoutCfg.getPoolSize())
-                : null;
+        this(registry, messageBroker, properties, objectMapper, backoffCalculator,
+                callbackMethodInvoker, securityContextPropagator, trustedClassResolver,
+                securityContextSigner, null);
     }
 
     private static ExecutorService createTimeoutExecutor(final int poolSize) {
@@ -171,6 +213,24 @@ public class StepExecutor {
 
         // Set the current step label on the message for monitoring
         message.setCurrentStepLabel(step.getLabel());
+
+        // SF-8: skip a step already recorded as processed (a broker redelivery
+        // of a step that already succeeded). Returning here lets the listener
+        // acknowledge the duplicate and drop it. The check is fail-open: if the
+        // store errors we process the message rather than risk dropping it.
+        IdempotencyKey idempotencyKey = new IdempotencyKey(message.getExecutionId(), stepId);
+        if (idempotencyActive()) {
+            try {
+                if (idempotencyStore.isProcessed(idempotencyKey)) {
+                    log.info("Skipping already-processed step {} for workflow {} [{}]",
+                            stepId, topic, message.getExecutionId());
+                    return;
+                }
+            } catch (Exception storeError) {
+                log.warn("Idempotency check failed for workflow {} [{}] step {}; processing anyway",
+                        topic, message.getExecutionId(), stepId, storeError);
+            }
+        }
 
         try {
             // Restore security context if present (SF-1: inside the try so that
@@ -244,6 +304,19 @@ public class StepExecutor {
                         topic, message.getExecutionId());
             }
 
+            // SF-8: record the step as processed only now that it has succeeded
+            // AND its next message is durably produced. A record failure must not
+            // trigger a retry (the advance already happened) — log and continue;
+            // the residual cost is that a later redelivery may re-run this step.
+            if (idempotencyActive()) {
+                try {
+                    idempotencyStore.markProcessed(idempotencyKey);
+                } catch (Exception storeError) {
+                    log.warn("Failed to record idempotency for workflow {} [{}] step {}",
+                            topic, message.getExecutionId(), stepId, storeError);
+                }
+            }
+
         } catch (Exception e) {
             handleFailure(message, step, definition, e);
         } finally {
@@ -257,6 +330,21 @@ public class StepExecutor {
                         message.getTopic(), message.getExecutionId(), clearError);
             }
         }
+    }
+
+    /**
+     * SF-8: whether de-duplication is active — a store is wired and the feature
+     * is enabled. getIdempotency() is tolerated null only for a bare mocked
+     * properties in tests (always populated on a real bean).
+     *
+     * @return true if the idempotency store should be consulted
+     */
+    private boolean idempotencyActive() {
+        if (idempotencyStore == null) {
+            return false;
+        }
+        StepprFlowProperties.Idempotency cfg = properties.getIdempotency();
+        return cfg != null && cfg.isEnabled();
     }
 
     /**

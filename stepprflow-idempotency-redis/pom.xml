@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.stepprflow</groupId>
+        <artifactId>stepprflow-parent</artifactId>
+        <version>1.0.1</version>
+    </parent>
+
+    <artifactId>stepprflow-idempotency-redis</artifactId>
+    <name>Stepprflow Idempotency Redis</name>
+    <description>Distributed Redis-backed idempotency store for Stepprflow (SF-8)</description>
+
+    <properties>
+        <main.basedir>${project.parent.basedir}</main.basedir>
+        <pitest.targetTests>io.github.stepprflow.idempotency.redis.*</pitest.targetTests>
+        <pitest.targetClasses>io.github.stepprflow.idempotency.redis.*</pitest.targetClasses>
+    </properties>
+
+    <dependencies>
+        <!-- Stepprflow Core (IdempotencyStore SPI) -->
+        <dependency>
+            <groupId>io.github.stepprflow</groupId>
+            <artifactId>stepprflow-core</artifactId>
+        </dependency>
+
+        <!-- Spring Data Redis (Lettuce) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

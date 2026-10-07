@@ -13,6 +13,7 @@ than editing history.
 - [ADR-0002](0002-at-least-once-delivery-contract.md) — At-least-once delivery contract
 - [ADR-0003](0003-security-context-propagation-signing.md) — Security context propagation & signing
 - [ADR-0004](0004-monitor-dual-mode-authentication.md) — Monitor dual-mode authentication
+- [ADR-0005](0005-idempotency-deduplication.md) — Idempotency / de-duplication
 
 ## Adding a new ADR
 
