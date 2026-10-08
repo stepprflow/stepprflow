@@ -46,8 +46,9 @@ RUN mvn -Pfull clean package -pl stepprflow-samples -am -DskipTests -q
 FROM eclipse-temurin:21-jre@sha256:cff19e6215689161eb6162c11b86b0c60ddf802164f2eaf48d570f8fb79a36c5
 
 WORKDIR /app
-RUN groupadd -g 1000 stepprflow && \
-    useradd -u 1000 -g stepprflow -s /bin/sh -m stepprflow
+# System account (id < 1000): the Ubuntu base already uses GID/UID 1000.
+RUN groupadd --system stepprflow && \
+    useradd --system -g stepprflow -s /bin/sh stepprflow
 
 COPY --from=builder /app/stepprflow-samples/target/stepprflow-samples-*.jar app.jar
 RUN chown -R stepprflow:stepprflow /app
