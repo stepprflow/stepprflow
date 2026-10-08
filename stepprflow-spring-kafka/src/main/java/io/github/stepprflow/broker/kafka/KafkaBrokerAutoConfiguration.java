@@ -12,6 +12,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -28,6 +29,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import io.github.stepprflow.core.registration.WorkflowRegistrationClient;
 import io.github.stepprflow.core.service.StepExecutor;
 import io.github.stepprflow.core.service.WorkflowRegistry;
 
@@ -184,5 +186,20 @@ public class KafkaBrokerAutoConfiguration {
             WorkflowRegistry workflowRegistry,
             org.springframework.context.ApplicationEventPublisher eventPublisher) {
         return new KafkaMessageListener(stepExecutor, workflowRegistry, eventPublisher);
+    }
+
+    /**
+     * Listens on the registration topic so the monitor's ANNOUNCE triggers a
+     * re-registration. Only created when this service actually registers
+     * workflows (a {@link WorkflowRegistrationClient} is present) — the
+     * monitoring server has no such bean, so it never reacts to its own
+     * announcement.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(WorkflowRegistrationClient.class)
+    public RegistrationAnnounceListener registrationAnnounceListener(
+            WorkflowRegistrationClient registrationClient) {
+        return new RegistrationAnnounceListener(registrationClient);
     }
 }

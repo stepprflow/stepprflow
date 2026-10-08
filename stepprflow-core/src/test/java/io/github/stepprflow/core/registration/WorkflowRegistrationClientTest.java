@@ -181,6 +181,28 @@ class WorkflowRegistrationClientTest {
 
             verify(messageBroker, never()).send(any(), any());
         }
+
+        @Test
+        @DisplayName("Should ignore non-ANNOUNCE registration messages (no re-register loop)")
+        void shouldIgnoreNonAnnounceMessages() {
+            RegistrationProperties properties = new RegistrationProperties();
+            WorkflowRegistrationClient client = new WorkflowRegistrationClient(
+                    properties, workflowRegistry, messageBroker,
+                    "test-app", 8080);
+
+            for (String action : List.of(
+                    WorkflowRegistrationRequest.ACTION_REGISTER,
+                    WorkflowRegistrationRequest.ACTION_HEARTBEAT,
+                    WorkflowRegistrationRequest.ACTION_DEREGISTER)) {
+                client.onRegistrationMessage(WorkflowMessage.builder()
+                        .topic(WorkflowRegistrationRequest.REGISTRATION_TOPIC)
+                        .metadata(Map.of(WorkflowRegistrationRequest.METADATA_ACTION, action))
+                        .build());
+            }
+            client.onRegistrationMessage(null);
+
+            verify(messageBroker, never()).send(any(), any());
+        }
     }
 
     @Nested
@@ -330,6 +352,37 @@ class WorkflowRegistrationClientTest {
             client.heartbeat();
 
             client.shutdown();
+        }
+
+        @Test
+        @DisplayName("Should re-register (REGISTER) when a monitor ANNOUNCE is received")
+        void shouldReRegisterOnAnnounce() {
+            when(workflowRegistry.getAllDefinitions()).thenReturn(List.of(
+                    WorkflowDefinition.builder()
+                            .topic("order-workflow")
+                            .description("Order processing")
+                            .steps(List.of(
+                                    StepDefinition.builder().id(1).label("Validate").build()))
+                            .build()
+            ));
+
+            WorkflowMessage announce = WorkflowMessage.builder()
+                    .topic(WorkflowRegistrationRequest.REGISTRATION_TOPIC)
+                    .metadata(Map.of(WorkflowRegistrationRequest.METADATA_ACTION,
+                            WorkflowRegistrationRequest.ACTION_ANNOUNCE))
+                    .build();
+
+            client.onRegistrationMessage(announce);
+
+            ArgumentCaptor<WorkflowMessage> captor = ArgumentCaptor.forClass(WorkflowMessage.class);
+            verify(messageBroker).send(
+                    eq(WorkflowRegistrationRequest.REGISTRATION_TOPIC), captor.capture());
+            assertThat(captor.getValue().getMetadata()
+                    .get(WorkflowRegistrationRequest.METADATA_ACTION))
+                    .isEqualTo(WorkflowRegistrationRequest.ACTION_REGISTER);
+            assertThat(captor.getValue().getPayload())
+                    .as("re-registration must carry the full workflow catalogue (steps)")
+                    .isNotNull();
         }
     }
 }

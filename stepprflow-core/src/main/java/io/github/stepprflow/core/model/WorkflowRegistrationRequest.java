@@ -38,6 +38,15 @@ public class WorkflowRegistrationRequest {
     public static final String ACTION_DEREGISTER = "DEREGISTER";
 
     /**
+     * Action value: the monitor announces it is online and asks every
+     * registered service to re-send its full registration. Published by the
+     * monitoring server on startup so a monitor that (re)started after the
+     * services — and thus missed their one-time REGISTER — repopulates the
+     * workflow catalogue (step definitions included) without a service restart.
+     */
+    public static final String ACTION_ANNOUNCE = "ANNOUNCE";
+
+    /**
      * Service name (application name).
      */
     private String serviceName;
