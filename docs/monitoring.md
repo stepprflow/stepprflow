@@ -86,20 +86,92 @@ stepprflow:
       instance-timeout: 90s                    # Mark instances stale after 90 seconds
       cleanup-interval: 30s                    # Run cleanup every 30 seconds
 
+    # Transactional outbox — reliable delivery of monitor-originated messages
+    # (e.g. replayed retries). Enabled by default.
+    outbox:
+      enabled: true
+      poll-interval: 1s                        # How often the relay drains the outbox
+      batch-size: 100                          # Messages drained per poll
+      max-attempts: 5                          # Delivery attempts before giving up
+      base-delay-ms: 1000                      # Backoff base (ms)
+      max-delay-ms: 60000                      # Backoff cap (ms)
+      sent-retention: 24h                      # Keep sent rows this long
+      cleanup-interval: 1h                     # Purge old sent rows this often
+      health:
+        pending-threshold: 1000                # Actuator health DOWN above this many pending
+        failed-threshold: 0                    # Actuator health DOWN above this many failed
+
     # MongoDB connection — the monitor builds its OWN MongoClient from this
     # property (NOT spring.data.mongodb.uri). The MONGODB_URI env var is
     # accepted as a convenience alias.
     mongodb:
       uri: mongodb://localhost:27017/stepprflow
+      database: stepprflow                     # Database name
 
     # Authentication (SF-5) — REQUIRED. With no mode set, the dashboard denies
     # every request (fail-closed) except /actuator/health. Pick basic or oidc.
     auth:
-      mode: basic                              # or: oidc
+      mode: basic                              # basic | oidc  (unset = deny all)
       basic:
         username: admin
         password: "{bcrypt}$2a$10$..."         # bcrypt hash (plaintext accepted but logged as a warning)
-        role: OPERATOR                          # OPERATOR (can mutate) or VIEWER (read-only)
+        role: OPERATOR                         # OPERATOR (can mutate) or VIEWER (read-only)
+      oidc:
+        roles-claim: roles                     # Flat claim carrying the user's roles
+        operator-role: stepprflow-operator     # Realm role → OPERATOR authority
+        viewer-role: stepprflow-viewer         # Realm role → VIEWER authority
+```
+
+Every property above shows its default — the module runs with none of them set
+except `stepprflow.monitor.auth.mode` (fail-closed until chosen) and
+`stepprflow.monitor.mongodb.uri`. Set only what you need to change.
+
+#### Enabling OIDC mode
+
+With `auth.mode: oidc` the dashboard is a standard Spring Security OAuth2
+**client**; configure the provider with the usual Spring properties (not under
+`stepprflow.*`):
+
+```yaml
+spring:
+  security:
+    oauth2:
+      client:
+        provider:
+          keycloak:
+            issuer-uri: https://auth.example.com/realms/my-realm
+        registration:
+          keycloak:
+            client-id: stepprflow-monitoring
+            client-secret: ${KEYCLOAK_CLIENT_SECRET}
+            scope: openid,profile
+            authorization-grant-type: authorization_code
+
+# Behind a TLS-terminating reverse proxy, so the OAuth2 redirect URI is built
+# as https rather than the internal http:
+server:
+  forward-headers-strategy: framework
+```
+
+The roles that grant `OPERATOR` / `VIEWER` are read from the flat
+`stepprflow.monitor.auth.oidc.roles-claim` and mapped via `operator-role` /
+`viewer-role` above.
+
+#### Kafka / payload properties
+
+The monitor consumes workflow events through the broker, so the broker
+properties apply here too — most importantly the topic scope, which **must**
+include the lifecycle topics (`.completed`, `.retry`, `.dlq`) so the dashboard
+sees completions and failures:
+
+```yaml
+stepprflow:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    topic-pattern: "^(my-workflow)(\\.retry|\\.completed|\\.dlq)?$"
+  # Opt-in strict payload deserialization (off by default — see security.md):
+  security:
+    trusted-package-enforcement: false
 ```
 
 ---
