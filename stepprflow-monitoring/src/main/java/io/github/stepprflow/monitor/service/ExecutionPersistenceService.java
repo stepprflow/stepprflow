@@ -122,9 +122,17 @@ public class ExecutionPersistenceService {
 
     /**
      * Resolve totalSteps from registered workflow definitions in MongoDB.
+     *
+     * <p>The unique index on {@code RegisteredWorkflow} is the compound key
+     * {@code (topic, serviceName)}, not {@code topic} alone: a topic
+     * legitimately registered by several services has several matching
+     * documents. {@link RegisteredWorkflowRepository#findFirstByTopic} is
+     * used instead of {@code findByTopic} so this never throws in that case
+     * — the step count for a given topic is identical across every service
+     * that registers it, so taking the first match is correct.</p>
      */
     private int resolveStepsFromRegistry(String topic) {
-        return registeredWorkflowRepository.findByTopic(topic)
+        return registeredWorkflowRepository.findFirstByTopic(topic)
                 .map(rw -> rw.getSteps().size())
                 .orElse(0);
     }

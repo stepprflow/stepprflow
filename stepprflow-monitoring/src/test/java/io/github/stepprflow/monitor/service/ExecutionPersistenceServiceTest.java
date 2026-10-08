@@ -8,6 +8,7 @@ import io.github.stepprflow.core.model.WorkflowDefinition;
 import io.github.stepprflow.core.model.WorkflowMessage;
 import io.github.stepprflow.core.model.WorkflowStatus;
 import io.github.stepprflow.core.service.WorkflowRegistry;
+import io.github.stepprflow.monitor.model.RegisteredWorkflow;
 import io.github.stepprflow.monitor.model.WorkflowExecution;
 import io.github.stepprflow.monitor.repository.RegisteredWorkflowRepository;
 import io.github.stepprflow.monitor.repository.WorkflowExecutionRepository;
@@ -22,6 +23,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.IncorrectResultSizeDataAccessException;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -866,6 +868,64 @@ class ExecutionPersistenceServiceTest {
             verify(repository).save(executionCaptor.capture());
             WorkflowExecution saved = executionCaptor.getValue();
             assertThat(saved.getStepHistory().get(0).getStepLabel()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("resolveStepsFromRegistry() - topic registered by multiple services")
+    class ResolveStepsFromRegistryMultiServiceTopicTests {
+
+        @Test
+        @DisplayName("Should resolve totalSteps via findFirstByTopic instead of the non-unique findByTopic")
+        void shouldResolveStepsUsingFindFirstByTopic() {
+            // The compound unique index is (topic, serviceName): a topic registered
+            // by several services has several matching documents, so the derived
+            // findByTopic query throws IncorrectResultSizeDataAccessException as
+            // soon as more than one service has registered it. Stubbed lenient
+            // (and never actually invoked) to prove the production code no
+            // longer calls findByTopic at all.
+            when(repository.findById("exec-123")).thenReturn(Optional.empty());
+            lenient().when(registeredWorkflowRepository.findByTopic("test-topic"))
+                    .thenThrow(new IncorrectResultSizeDataAccessException(1, 2));
+
+            RegisteredWorkflow registeredByOneOfTheServices = RegisteredWorkflow.builder()
+                    .topic("test-topic")
+                    .serviceName("cockpit-svc-references")
+                    .steps(List.of(
+                            RegisteredWorkflow.StepInfo.builder().id(1).label("Step 1").build(),
+                            RegisteredWorkflow.StepInfo.builder().id(2).label("Step 2").build(),
+                            RegisteredWorkflow.StepInfo.builder().id(3).label("Step 3").build()))
+                    .build();
+            when(registeredWorkflowRepository.findFirstByTopic("test-topic"))
+                    .thenReturn(Optional.of(registeredByOneOfTheServices));
+
+            testMessage = testMessage.toBuilder()
+                    .totalSteps(0) // cross-service start: not known by the caller
+                    .build();
+
+            persistenceService.onWorkflowMessage(testMessage);
+
+            verify(repository).save(executionCaptor.capture());
+            WorkflowExecution saved = executionCaptor.getValue();
+            assertThat(saved.getTotalSteps()).isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("Should return 0 totalSteps when the topic is not registered at all")
+        void shouldReturnZeroStepsWhenTopicNotRegistered() {
+            when(repository.findById("exec-123")).thenReturn(Optional.empty());
+            when(registeredWorkflowRepository.findFirstByTopic("test-topic"))
+                    .thenReturn(Optional.empty());
+
+            testMessage = testMessage.toBuilder()
+                    .totalSteps(0)
+                    .build();
+
+            persistenceService.onWorkflowMessage(testMessage);
+
+            verify(repository).save(executionCaptor.capture());
+            WorkflowExecution saved = executionCaptor.getValue();
+            assertThat(saved.getTotalSteps()).isZero();
         }
     }
 }
