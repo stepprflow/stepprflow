@@ -175,6 +175,15 @@ stepprflow:
       - com.mycompany.workflow.payload
 ```
 
+> **Deserialization (changed default).** By default a step's payload is
+> deserialized into the receiver's own `@Step` parameter type — the sender's
+> declared `payloadType` is never resolved via reflection, so you do **not** need
+> to list other services' packages (or any `trusted-packages`) to receive their
+> messages, and services stay decoupled. `trusted-packages` only takes effect
+> under the opt-in strict mode `stepprflow.security.trusted-package-enforcement:
+> true`, which restores allowlist resolution of the sender's `payloadType`
+> (an untrusted type is sent to the DLQ).
+
 ## Annotations
 
 ### @Topic
