@@ -3,9 +3,27 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Stage 1: Build Spring Boot application
+# Stage 0: Build the SPA on the NATIVE build platform
 # -----------------------------------------------------------------------------
-FROM maven:3.9-eclipse-temurin-21-alpine@sha256:308cba8b638ed7e4658cea3f8399066219466211c805f6d5728c3c9c7614661b AS builder
+# Pinned to $BUILDPLATFORM so node/vite always run natively even for a cross
+# (e.g. arm64) image build — running the official glibc Node.js under QEMU
+# emulation is slow and occasionally segfaults. The produced bundle is static
+# and architecture-independent, so it is simply COPYd into the builder below.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS ui-builder
+
+WORKDIR /ui
+COPY stepprflow-ui/package.json stepprflow-ui/package-lock.json ./
+RUN npm ci
+COPY stepprflow-ui/ ./
+RUN npm run build
+
+# -----------------------------------------------------------------------------
+# Stage 1: Build Spring Boot application (backend jar + packaged SPA)
+# -----------------------------------------------------------------------------
+# glibc base (Debian), NOT Alpine. The SPA is built in the native stage above
+# and copied in, so the frontend-maven-plugin is skipped here (-Dfrontend.skip):
+# the Maven build only assembles the backend jar and packages the copied bundle.
+FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS builder
 
 WORKDIR /app
 
@@ -27,11 +45,15 @@ COPY stepprflow-spring-rabbitmq/src stepprflow-spring-rabbitmq/src
 COPY stepprflow-idempotency-redis/src stepprflow-idempotency-redis/src
 COPY stepprflow-monitoring/src stepprflow-monitoring/src
 
+# The SPA bundle built natively in stage 0 — packaged as-is into the jar's
+# classpath static resources (frontend-maven-plugin is skipped below).
+COPY --from=ui-builder /ui/dist stepprflow-monitoring/src/main/resources/static
+
 # Copy checkstyle config
 COPY config/checkstyle/checkstyle.xml config/checkstyle/checkstyle.xml
 
-# Build the application
-RUN mvn clean package -pl stepprflow-monitoring -am -DskipTests -q
+# Build the backend jar and package the copied SPA (frontend build skipped).
+RUN mvn clean package -pl stepprflow-monitoring -am -DskipTests -Dfrontend.skip=true -q
 
 # -----------------------------------------------------------------------------
 # Stage 2: Extract Spring Boot layers for optimized caching

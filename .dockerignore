@@ -1,0 +1,5 @@
+
+# SPA build artifacts — rebuilt inside the image
+stepprflow-ui/node_modules/
+stepprflow-ui/dist/
+**/node_modules/

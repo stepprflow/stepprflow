@@ -18,6 +18,11 @@
 
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
+        <!-- Frontend (stepprflow-ui) build — kept in lockstep with stepprflow-ui/pom.xml. -->
+        <node.version>v22.13.1</node.version>
+        <npm.version>10.9.2</npm.version>
+        <frontend-maven-plugin.version>2.0.0</frontend-maven-plugin.version>
+        <frontend.skip>false</frontend.skip>
     </properties>
 
     <dependencies>
@@ -230,6 +235,51 @@
                                     </excludes>
                                 </rule>
                             </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+                Build the SPA (stepprflow-ui) as part of this module so the jar
+                always carries a fresh bundle. Output goes straight into
+                target/classes/static (served from the classpath). Runs before
+                the test phase so UiBundleFreshnessTest sees the built bundle.
+                The committed static/ was removed (see .gitignore) — this is now
+                the single source of the packaged UI.
+            -->
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <version>${frontend-maven-plugin.version}</version>
+                <configuration>
+                    <workingDirectory>${project.basedir}/../stepprflow-ui</workingDirectory>
+                    <installDirectory>${project.build.directory}</installDirectory>
+                    <skip>${frontend.skip}</skip>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>install-node-and-npm</id>
+                        <phase>process-classes</phase>
+                        <goals><goal>install-node-and-npm</goal></goals>
+                        <configuration>
+                            <nodeVersion>${node.version}</nodeVersion>
+                            <npmVersion>${npm.version}</npmVersion>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm-ci</id>
+                        <phase>process-classes</phase>
+                        <goals><goal>npm</goal></goals>
+                        <configuration>
+                            <arguments>ci</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm-build</id>
+                        <phase>process-classes</phase>
+                        <goals><goal>npm</goal></goals>
+                        <configuration>
+                            <arguments>run build -- --outDir ${project.build.outputDirectory}/static --emptyOutDir</arguments>
                         </configuration>
                     </execution>
                 </executions>

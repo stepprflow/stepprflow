@@ -6,20 +6,22 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Stage 1: Build the Vue.js UI
+# Stage 0: Build the SPA on the NATIVE build platform (avoids QEMU node)
 # -----------------------------------------------------------------------------
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS ui-builder
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS ui-builder
 
 WORKDIR /ui
-COPY stepprflow-ui/package.json stepprflow-ui/package-lock.json* ./
+COPY stepprflow-ui/package.json stepprflow-ui/package-lock.json ./
 RUN npm ci
-COPY stepprflow-ui/ .
+COPY stepprflow-ui/ ./
 RUN npm run build
 
 # -----------------------------------------------------------------------------
-# Stage 2: Build the Spring Boot application (with UI in static/)
+# Stage 1: Build the Spring Boot application (backend jar + packaged SPA)
 # -----------------------------------------------------------------------------
-FROM maven:3.9-eclipse-temurin-21-alpine@sha256:308cba8b638ed7e4658cea3f8399066219466211c805f6d5728c3c9c7614661b AS builder
+# glibc base (Debian), NOT Alpine. The SPA is built natively in stage 0 and
+# copied in, so the frontend-maven-plugin is skipped here.
+FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS builder
 
 WORKDIR /app
 
@@ -41,14 +43,14 @@ COPY stepprflow-spring-rabbitmq/src stepprflow-spring-rabbitmq/src
 COPY stepprflow-idempotency-redis/src stepprflow-idempotency-redis/src
 COPY stepprflow-monitoring/src stepprflow-monitoring/src
 
+# The SPA bundle built natively in stage 0 — packaged as-is (plugin skipped).
+COPY --from=ui-builder /ui/dist stepprflow-monitoring/src/main/resources/static
+
 # Copy checkstyle config
 COPY config/checkstyle/checkstyle.xml config/checkstyle/checkstyle.xml
 
-# Inject the built UI into Spring Boot's static resources
-COPY --from=ui-builder /ui/dist/ stepprflow-monitoring/src/main/resources/static/
-
-# Build the application
-RUN mvn clean package -pl stepprflow-monitoring -am -DskipTests -q
+# Build the backend jar and package the copied SPA (frontend build skipped).
+RUN mvn clean package -pl stepprflow-monitoring -am -DskipTests -Dfrontend.skip=true -q
 
 # -----------------------------------------------------------------------------
 # Stage 3: Extract Spring Boot layers
