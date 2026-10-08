@@ -123,6 +123,31 @@ public class WorkflowRegistrationClient {
     }
 
     /**
+     * Handles an inbound message on the registration topic. When the monitor
+     * publishes an {@link WorkflowRegistrationRequest#ACTION_ANNOUNCE}, this
+     * service re-sends its full registration (step definitions included) so a
+     * monitor that started after the service — and thus missed the one-time
+     * startup REGISTER — rebuilds its workflow catalogue without a restart.
+     *
+     * <p>Every other action is ignored (our own REGISTER/HEARTBEAT/DEREGISTER
+     * and other services' messages), so there is no feedback loop or
+     * re-registration storm.</p>
+     *
+     * @param message the registration-topic message (may be null)
+     */
+    public void onRegistrationMessage(final WorkflowMessage message) {
+        if (message == null || message.getMetadata() == null) {
+            return;
+        }
+        final Object action =
+                message.getMetadata().get(WorkflowRegistrationRequest.METADATA_ACTION);
+        if (WorkflowRegistrationRequest.ACTION_ANNOUNCE.equals(action)) {
+            log.info("Monitor ANNOUNCE received — re-registering workflows for {}", appName);
+            registerWorkflows();
+        }
+    }
+
+    /**
      * Sends a deregistration message on shutdown.
      */
     @PreDestroy
