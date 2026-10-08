@@ -115,14 +115,60 @@ public class MonitorProperties {
     @Data
     public static class Retention {
         /**
-         * How long to keep completed executions.
+         * Enable the scheduled retention purge job. When {@code false}, the cron
+         * tick is a no-op (manual purges triggered explicitly, e.g. via the admin
+         * endpoint, are not affected by this flag).
          */
-        private Duration completedTtl = Duration.ofDays(7);
+        private boolean enabled = true;
 
         /**
-         * How long to keep failed executions.
+         * Maximum age of an execution — based on {@code updatedAt}, falling back
+         * to {@code createdAt} when unset — before it is purged, REGARDLESS of
+         * its status. This is what actually enforces "purge after N days",
+         * including stuck executions ({@code IN_PROGRESS}/{@code PENDING}/
+         * {@code RETRY_PENDING}) and {@code CANCELLED} ones. Default: 30 days.
          */
-        private Duration failedTtl = Duration.ofDays(30);
+        private Duration maxAge = Duration.ofDays(30);
+
+        /**
+         * Optional override of the retention window for {@code COMPLETED}
+         * executions only. Falls back to {@link #maxAge} (30 days by default)
+         * when unset.
+         */
+        private Duration completedTtl;
+
+        /**
+         * Optional override of the retention window for {@code FAILED}
+         * executions only. Falls back to {@link #maxAge} (30 days by default)
+         * when unset.
+         */
+        private Duration failedTtl;
+
+        /**
+         * Cron expression for the scheduled purge job.
+         */
+        private String cleanupCron = "0 0 2 * * ?";
+
+        /**
+         * Returns {@link #maxAge}, defaulting to 30 days if unset.
+         */
+        public Duration effectiveMaxAge() {
+            return maxAge != null ? maxAge : Duration.ofDays(30);
+        }
+
+        /**
+         * Returns {@link #completedTtl} if set, otherwise {@link #effectiveMaxAge()}.
+         */
+        public Duration effectiveCompletedTtl() {
+            return completedTtl != null ? completedTtl : effectiveMaxAge();
+        }
+
+        /**
+         * Returns {@link #failedTtl} if set, otherwise {@link #effectiveMaxAge()}.
+         */
+        public Duration effectiveFailedTtl() {
+            return failedTtl != null ? failedTtl : effectiveMaxAge();
+        }
     }
 
     @Data

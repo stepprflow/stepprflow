@@ -1,6 +1,5 @@
 package io.github.stepprflow.monitor.integration;
 
-import io.github.stepprflow.core.model.ErrorInfo;
 import io.github.stepprflow.core.model.RetryInfo;
 import io.github.stepprflow.core.model.WorkflowStatus;
 import io.github.stepprflow.monitor.model.WorkflowExecution;
@@ -330,53 +329,96 @@ class WorkflowMonitorIntegrationTest {
     }
 
     @Nested
-    @DisplayName("Cleanup operations")
-    class CleanupOperationsTests {
+    @DisplayName("Retention purge operations")
+    class RetentionPurgeTests {
 
         @Test
-        @DisplayName("Should find completed executions before cutoff date")
-        void shouldFindCompletedExecutionsBeforeCutoffDate() {
+        @DisplayName("Should delete COMPLETED executions older than the cutoff, by updatedAt")
+        void shouldDeleteCompletedExecutionsOlderThanCutoff() {
             // Given
             var now = Instant.now();
             var cutoff = now.minus(7, ChronoUnit.DAYS);
 
-            var oldCompleted = createCompletedExecution("old1", now.minus(10, ChronoUnit.DAYS));
-            var recentCompleted = createCompletedExecution("recent1", now.minus(1, ChronoUnit.DAYS));
-            var oldFailed = createExecution("old-failed", "topic", WorkflowStatus.FAILED);
-            oldFailed.setCompletedAt(now.minus(10, ChronoUnit.DAYS));
+            var oldCompleted = createExecutionWithAge("old1", WorkflowStatus.COMPLETED, now.minus(10, ChronoUnit.DAYS));
+            var recentCompleted = createExecutionWithAge("recent1", WorkflowStatus.COMPLETED, now.minus(1, ChronoUnit.DAYS));
+            var oldFailed = createExecutionWithAge("old-failed", WorkflowStatus.FAILED, now.minus(10, ChronoUnit.DAYS));
 
             repository.saveAll(List.of(oldCompleted, recentCompleted, oldFailed));
 
             // When
-            var toCleanup = repository.findCompletedBefore(cutoff);
+            long deleted = repository.deleteByStatusAndAgeBefore(WorkflowStatus.COMPLETED, cutoff);
 
             // Then
-            assertThat(toCleanup)
-                    .hasSize(1)
+            assertThat(deleted).isEqualTo(1);
+            assertThat(repository.findAll())
                     .extracting(WorkflowExecution::getExecutionId)
-                    .containsExactly("old1");
+                    .containsExactlyInAnyOrder("recent1", "old-failed");
         }
 
         @Test
-        @DisplayName("Should find failed executions before cutoff date")
-        void shouldFindFailedExecutionsBeforeCutoffDate() {
+        @DisplayName("Should fall back to createdAt when updatedAt is null")
+        void shouldFallBackToCreatedAtWhenUpdatedAtIsNull() {
+            // Given
+            var now = Instant.now();
+            var cutoff = now.minus(7, ChronoUnit.DAYS);
+
+            var oldNoUpdatedAt = WorkflowExecution.builder()
+                    .executionId("old-no-updated-at")
+                    .topic("topic")
+                    .status(WorkflowStatus.FAILED)
+                    .currentStep(1)
+                    .totalSteps(1)
+                    .createdAt(now.minus(10, ChronoUnit.DAYS))
+                    .build();
+            var recentNoUpdatedAt = WorkflowExecution.builder()
+                    .executionId("recent-no-updated-at")
+                    .topic("topic")
+                    .status(WorkflowStatus.FAILED)
+                    .currentStep(1)
+                    .totalSteps(1)
+                    .createdAt(now.minus(1, ChronoUnit.DAYS))
+                    .build();
+
+            repository.saveAll(List.of(oldNoUpdatedAt, recentNoUpdatedAt));
+
+            // When
+            long deleted = repository.deleteByStatusAndAgeBefore(WorkflowStatus.FAILED, cutoff);
+
+            // Then
+            assertThat(deleted).isEqualTo(1);
+            assertThat(repository.findAll())
+                    .extracting(WorkflowExecution::getExecutionId)
+                    .containsExactly("recent-no-updated-at");
+        }
+
+        @Test
+        @DisplayName("Should delete stuck (IN_PROGRESS/PENDING/RETRY_PENDING) and CANCELLED executions "
+                + "regardless of status (F2/F11), while sparing COMPLETED/FAILED handled by their own TTL")
+        void shouldDeleteStuckAndCancelledExecutionsRegardlessOfStatus() {
             // Given
             var now = Instant.now();
             var cutoff = now.minus(30, ChronoUnit.DAYS);
 
-            var oldFailed = createFailedExecution("old-fail", now.minus(45, ChronoUnit.DAYS));
-            var recentFailed = createFailedExecution("recent-fail", now.minus(5, ChronoUnit.DAYS));
+            var oldInProgress = createExecutionWithAge("old-in-progress", WorkflowStatus.IN_PROGRESS, now.minus(40, ChronoUnit.DAYS));
+            var oldPending = createExecutionWithAge("old-pending", WorkflowStatus.PENDING, now.minus(40, ChronoUnit.DAYS));
+            var oldRetryPending = createExecutionWithAge("old-retry-pending", WorkflowStatus.RETRY_PENDING, now.minus(40, ChronoUnit.DAYS));
+            var oldCancelled = createExecutionWithAge("old-cancelled", WorkflowStatus.CANCELLED, now.minus(40, ChronoUnit.DAYS));
+            var recentInProgress = createExecutionWithAge("recent-in-progress", WorkflowStatus.IN_PROGRESS, now.minus(1, ChronoUnit.DAYS));
+            var oldCompleted = createExecutionWithAge("old-completed", WorkflowStatus.COMPLETED, now.minus(40, ChronoUnit.DAYS));
+            var oldFailed = createExecutionWithAge("old-failed", WorkflowStatus.FAILED, now.minus(40, ChronoUnit.DAYS));
 
-            repository.saveAll(List.of(oldFailed, recentFailed));
+            repository.saveAll(List.of(oldInProgress, oldPending, oldRetryPending, oldCancelled,
+                    recentInProgress, oldCompleted, oldFailed));
 
             // When
-            var toCleanup = repository.findFailedBefore(cutoff);
+            long deleted = repository.deleteByStatusNotInAndAgeBefore(
+                    List.of(WorkflowStatus.COMPLETED, WorkflowStatus.FAILED), cutoff);
 
             // Then
-            assertThat(toCleanup)
-                    .hasSize(1)
+            assertThat(deleted).isEqualTo(4);
+            assertThat(repository.findAll())
                     .extracting(WorkflowExecution::getExecutionId)
-                    .containsExactly("old-fail");
+                    .containsExactlyInAnyOrder("recent-in-progress", "old-completed", "old-failed");
         }
     }
 
@@ -477,33 +519,20 @@ class WorkflowMonitorIntegrationTest {
                 .build();
     }
 
-    private WorkflowExecution createCompletedExecution(String executionId, Instant completedAt) {
+    /**
+     * Builds an execution whose age is driven by {@code updatedAt} (the field the
+     * retention purge queries key off), as opposed to {@code createdAt} or
+     * {@code completedAt}.
+     */
+    private WorkflowExecution createExecutionWithAge(String executionId, WorkflowStatus status, Instant updatedAt) {
         return WorkflowExecution.builder()
                 .executionId(executionId)
                 .topic("topic")
-                .status(WorkflowStatus.COMPLETED)
+                .status(status)
                 .currentStep(1)
                 .totalSteps(1)
-                .createdAt(completedAt.minus(1, ChronoUnit.HOURS))
-                .completedAt(completedAt)
-                .build();
-    }
-
-    private WorkflowExecution createFailedExecution(String executionId, Instant completedAt) {
-        var errorInfo = ErrorInfo.builder()
-                .code("ERR_001")
-                .message("Test error")
-                .build();
-
-        return WorkflowExecution.builder()
-                .executionId(executionId)
-                .topic("topic")
-                .status(WorkflowStatus.FAILED)
-                .currentStep(1)
-                .totalSteps(1)
-                .errorInfo(errorInfo)
-                .createdAt(completedAt.minus(1, ChronoUnit.HOURS))
-                .completedAt(completedAt)
+                .createdAt(updatedAt.minus(1, ChronoUnit.HOURS))
+                .updatedAt(updatedAt)
                 .build();
     }
 }

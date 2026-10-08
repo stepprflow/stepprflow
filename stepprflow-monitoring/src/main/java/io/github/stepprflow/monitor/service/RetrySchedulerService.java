@@ -2,7 +2,6 @@ package io.github.stepprflow.monitor.service;
 
 import io.github.stepprflow.core.broker.MessageBroker;
 import io.github.stepprflow.core.model.WorkflowMessage;
-import io.github.stepprflow.monitor.MonitorProperties;
 import io.github.stepprflow.monitor.model.WorkflowExecution;
 import io.github.stepprflow.monitor.repository.WorkflowExecutionRepository;
 import io.github.stepprflow.monitor.util.WorkflowMessageFactory;
@@ -28,7 +27,6 @@ public class RetrySchedulerService {
 
     private final WorkflowExecutionRepository repository;
     private final MessageBroker messageBroker;
-    private final MonitorProperties properties;
     private final WorkflowMessageFactory messageFactory;
 
     /**
@@ -67,29 +65,5 @@ public class RetrySchedulerService {
 
         WorkflowMessage message = messageFactory.createRetryMessage(execution);
         messageBroker.send(execution.getTopic(), message);
-    }
-
-    /**
-     * Clean up old executions.
-     */
-    @Scheduled(cron = "0 0 2 * * ?") // 2 AM daily
-    public void cleanupOldExecutions() {
-        log.info("Starting cleanup of old executions");
-
-        // Clean completed executions
-        Instant completedCutoff = Instant.now().minus(properties.getRetention().getCompletedTtl());
-        List<WorkflowExecution> oldCompleted = repository.findCompletedBefore(completedCutoff);
-        if (!oldCompleted.isEmpty()) {
-            repository.deleteAll(oldCompleted);
-            log.info("Deleted {} old completed executions", oldCompleted.size());
-        }
-
-        // Clean failed executions
-        Instant failedCutoff = Instant.now().minus(properties.getRetention().getFailedTtl());
-        List<WorkflowExecution> oldFailed = repository.findFailedBefore(failedCutoff);
-        if (!oldFailed.isEmpty()) {
-            repository.deleteAll(oldFailed);
-            log.info("Deleted {} old failed executions", oldFailed.size());
-        }
     }
 }
