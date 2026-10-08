@@ -3,9 +3,13 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Stage 1: Build Spring Boot application
+# Stage 1: Build Spring Boot application (backend jar + SPA bundle)
 # -----------------------------------------------------------------------------
-FROM maven:3.9-eclipse-temurin-21-alpine@sha256:308cba8b638ed7e4658cea3f8399066219466211c805f6d5728c3c9c7614661b AS builder
+# glibc base (Debian), NOT Alpine: the monitoring build now rebuilds the SPA via
+# frontend-maven-plugin, which downloads an official Node.js binary linked
+# against glibc. That binary cannot run on Alpine's musl, so the frontend build
+# (and therefore the whole package) would fail on an Alpine builder.
+FROM maven:3.9-eclipse-temurin-21 AS builder
 
 WORKDIR /app
 
@@ -27,10 +31,14 @@ COPY stepprflow-spring-rabbitmq/src stepprflow-spring-rabbitmq/src
 COPY stepprflow-idempotency-redis/src stepprflow-idempotency-redis/src
 COPY stepprflow-monitoring/src stepprflow-monitoring/src
 
+# The SPA source — rebuilt into the monitoring jar by frontend-maven-plugin
+# during `mvn package`. node_modules/dist are excluded via .dockerignore.
+COPY stepprflow-ui stepprflow-ui
+
 # Copy checkstyle config
 COPY config/checkstyle/checkstyle.xml config/checkstyle/checkstyle.xml
 
-# Build the application
+# Build the application (backend + SPA bundle, no committed static anymore)
 RUN mvn clean package -pl stepprflow-monitoring -am -DskipTests -q
 
 # -----------------------------------------------------------------------------

@@ -100,3 +100,6 @@ docker-compose.override.yml
 
 # Qodana
 qodana-results/
+
+# Generated SPA bundle — built from stepprflow-ui by frontend-maven-plugin during the monitoring build
+stepprflow-monitoring/src/main/resources/static/

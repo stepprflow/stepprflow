@@ -6,20 +6,12 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Stage 1: Build the Vue.js UI
+# Stage 1: Build the Spring Boot application (backend jar + SPA bundle)
 # -----------------------------------------------------------------------------
-FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS ui-builder
-
-WORKDIR /ui
-COPY stepprflow-ui/package.json stepprflow-ui/package-lock.json* ./
-RUN npm ci
-COPY stepprflow-ui/ .
-RUN npm run build
-
-# -----------------------------------------------------------------------------
-# Stage 2: Build the Spring Boot application (with UI in static/)
-# -----------------------------------------------------------------------------
-FROM maven:3.9-eclipse-temurin-21-alpine@sha256:308cba8b638ed7e4658cea3f8399066219466211c805f6d5728c3c9c7614661b AS builder
+# glibc base (Debian), NOT Alpine: the monitoring build rebuilds the SPA via
+# frontend-maven-plugin during `mvn package`, and its Node.js binary is
+# glibc-linked and cannot run on Alpine's musl.
+FROM maven:3.9-eclipse-temurin-21 AS builder
 
 WORKDIR /app
 
@@ -41,13 +33,13 @@ COPY stepprflow-spring-rabbitmq/src stepprflow-spring-rabbitmq/src
 COPY stepprflow-idempotency-redis/src stepprflow-idempotency-redis/src
 COPY stepprflow-monitoring/src stepprflow-monitoring/src
 
+# The SPA source — rebuilt into the jar by frontend-maven-plugin during package.
+COPY stepprflow-ui stepprflow-ui
+
 # Copy checkstyle config
 COPY config/checkstyle/checkstyle.xml config/checkstyle/checkstyle.xml
 
-# Inject the built UI into Spring Boot's static resources
-COPY --from=ui-builder /ui/dist/ stepprflow-monitoring/src/main/resources/static/
-
-# Build the application
+# Build the application (backend + SPA bundle)
 RUN mvn clean package -pl stepprflow-monitoring -am -DskipTests -q
 
 # -----------------------------------------------------------------------------
