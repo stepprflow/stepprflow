@@ -274,6 +274,22 @@ public class StepprFlowProperties {
          * HMAC signing of the propagated security context.
          */
         private ContextSigning contextSigning = new ContextSigning();
+
+        /**
+         * Opt-in strict deserialization: when {@code true}, a message's
+         * {@code payloadType} is resolved through the trusted-packages allowlist
+         * ({@code Class.forName}) and an untrusted type is rejected (the 1.1.x
+         * hardening behaviour).
+         *
+         * <p>Default {@code false}: the {@code payloadType} declared by the
+         * sender is never instantiated. Instead the payload is deserialized into
+         * the receiver's own {@code @Step}/callback parameter type (or left as a
+         * raw map when the parameter is {@code Object}). This removes the
+         * reflective-instantiation surface entirely and decouples services — a
+         * consumer never needs the producer's classes on its classpath, nor any
+         * {@code trusted-packages} configuration.</p>
+         */
+        private boolean trustedPackageEnforcement = false;
     }
 
     /**

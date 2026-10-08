@@ -450,24 +450,33 @@ public class StepExecutor {
             return null;
         }
 
-        String payloadType = message.getPayloadType();
-        if (Objects.nonNull(payloadType)) {
+        final String payloadType = message.getPayloadType();
+
+        // Opt-in strict mode (stepprflow.security.trusted-package-enforcement=true):
+        // resolve the SENDER-declared payloadType through the trusted-packages
+        // allowlist and reject an untrusted type (RCE guard) before any class is
+        // loaded — UntrustedPayloadTypeException propagates out and is treated as
+        // a non-retryable failure (DLQ). Off by default.
+        if (properties.getSecurity().isTrustedPackageEnforcement()
+                && Objects.nonNull(payloadType)) {
             try {
-                // SECURITY: rejects an untrusted payloadType (RCE guard) before
-                // any class is loaded; UntrustedPayloadTypeException propagates
-                // out and is treated as a non-retryable failure (DLQ).
-                Class<?> payloadClass =
+                final Class<?> payloadClass =
                         trustedClassResolver.loadTrustedClass(payloadType);
                 return objectMapper.convertValue(message.getPayload(), payloadClass);
             } catch (ClassNotFoundException e) {
                 log.warn("Could not find payload class {}, falling back to step parameter type",
                          payloadType);
-                // Fall back to the step method's parameter type
-                Class<?>[] paramTypes = step.getMethod().getParameterTypes();
-                if (paramTypes.length == 1) {
-                    return objectMapper.convertValue(message.getPayload(), paramTypes[0]);
-                }
             }
+        }
+
+        // Default: deserialize into the receiver's own @Step parameter type. The
+        // sender-declared payloadType is never instantiated, so no trusted-packages
+        // configuration is needed and a consumer never needs the producer's classes
+        // on its classpath. Falls back to the raw payload (a map/list/scalar) when
+        // the step takes Object or no single typed parameter.
+        final Class<?>[] paramTypes = step.getMethod().getParameterTypes();
+        if (paramTypes.length == 1 && paramTypes[0] != Object.class) {
+            return objectMapper.convertValue(message.getPayload(), paramTypes[0]);
         }
 
         return message.getPayload();

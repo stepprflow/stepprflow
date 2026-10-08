@@ -35,6 +35,12 @@ stepprflow:
       - com.mycompany.model
 ```
 
+> **Note.** `trusted-packages` is only consulted under the opt-in strict mode
+> `stepprflow.security.trusted-package-enforcement: true`. By default, payloads
+> are deserialized into the receiver's `@Step` parameter type and the sender's
+> `payloadType` is never resolved via reflection — no `trusted-packages` entries
+> are required to receive cross-service messages.
+
 ### Advanced Configuration
 
 ```yaml

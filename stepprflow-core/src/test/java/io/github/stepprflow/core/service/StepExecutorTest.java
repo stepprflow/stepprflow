@@ -100,6 +100,11 @@ class StepExecutorTest {
         // the stored context unchanged so restore() sees the original value.
         lenient().when(securityContextSigner.unwrapAndVerify(any(), any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(2));
+
+        // Trusted-package enforcement is off by default (opt-in): the payload is
+        // deserialized into the step's own parameter type.
+        lenient().when(properties.getSecurity())
+                .thenReturn(new StepprFlowProperties.Security());
     }
 
     @Nested
@@ -647,10 +652,14 @@ class StepExecutorTest {
         }
 
         @Test
-        @DisplayName("Should DLQ (not retry, not execute the step) when payloadType is untrusted")
+        @DisplayName("Opt-in strict mode: DLQ (not retry, not execute) when payloadType is untrusted")
         void shouldDlqWhenPayloadTypeUntrusted() throws Exception {
             when(properties.getRetry()).thenReturn(retryConfig);
             when(properties.getDlq()).thenReturn(dlqConfig);
+            // Enable the opt-in strict deserialization mode.
+            StepprFlowProperties.Security strict = new StepprFlowProperties.Security();
+            strict.setTrustedPackageEnforcement(true);
+            when(properties.getSecurity()).thenReturn(strict);
             testMessage = testMessage.toBuilder()
                     .payloadType("com.evil.Gadget")
                     .build();
@@ -672,6 +681,26 @@ class StepExecutorTest {
             verify(messageBroker).sendSync(eq("test-topic.dlq"), any(WorkflowMessage.class));
             verify(messageBroker, never()).sendSync(eq("test-topic.retry"), any());
             assertThat(testWorkflow.step1Called).isFalse();
+        }
+
+        @Test
+        @DisplayName("Default (enforcement off): untrusted payloadType is ignored, step runs via its own param type")
+        void shouldIgnoreUntrustedPayloadTypeByDefault() throws Exception {
+            // getSecurity() defaults to enforcement=false (outer setUp stub).
+            testMessage = testMessage.toBuilder()
+                    .payloadType("com.evil.Gadget")
+                    .build();
+
+            StepDefinition step1 = createStepDefinition(1, "step1");
+            testDefinition = createWorkflowDefinition(List.of(step1));
+            when(registry.getDefinition("test-topic")).thenReturn(testDefinition);
+
+            stepExecutor.execute(testMessage);
+
+            // The sender-declared type is never resolved; the step runs normally.
+            verify(trustedClassResolver, never()).loadTrustedClass(any());
+            verify(messageBroker, never()).sendSync(eq("test-topic.dlq"), any());
+            assertThat(testWorkflow.step1Called).isTrue();
         }
     }
 

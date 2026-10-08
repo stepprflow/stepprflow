@@ -192,6 +192,14 @@ stepprflow:
       - io.github.stepprflow.core.model
       - com.mycompany.model
 
+  # Deserialization: by default a step's payload is deserialized into the
+  # receiver's own @Step parameter type and the sender's payloadType is never
+  # resolved via reflection (no trusted-packages needed, services decoupled).
+  # The sender's payloadType is only resolved through the trusted-packages
+  # allowlist under opt-in strict mode:
+  #   security:
+  #     trusted-package-enforcement: true
+
   # Registration is automatic when a MessageBroker bean is present.
   # No server URL needed — registration goes through the broker.
   registration:
