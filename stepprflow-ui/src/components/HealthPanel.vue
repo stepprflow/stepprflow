@@ -15,9 +15,12 @@
       </div>
 
       <!-- Components -->
-      <div v-if="health.components" class="space-y-3">
+      <!-- "circuitBreakers" is intentionally excluded: it is already shown in detail
+           (with a Reset action) in the dedicated Circuit Breakers section below,
+           so showing it here too would just duplicate the same state. -->
+      <div v-if="visibleComponents.length" class="space-y-3">
         <div
-          v-for="(component, name) in health.components"
+          v-for="[name, component] in visibleComponents"
           :key="name"
           class="rounded-lg border border-gray-100 bg-gray-50 p-3"
         >
@@ -55,5 +58,10 @@ const statusTextClass = computed(() => {
   if (props.health.status === 'UP') return 'text-emerald-700'
   if (props.health.status === 'DEGRADED') return 'text-amber-700'
   return 'text-red-700'
+})
+
+const visibleComponents = computed(() => {
+  if (!props.health?.components) return []
+  return Object.entries(props.health.components).filter(([name]) => name !== 'circuitBreakers')
 })
 </script>

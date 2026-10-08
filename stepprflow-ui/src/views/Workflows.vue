@@ -54,13 +54,16 @@
           <span>{{ wf.steps?.length ?? '?' }} steps</span>
         </div>
 
-        <div v-if="wf.registeredServices?.length" class="mt-2 flex flex-wrap gap-1">
+        <!-- The API field is `registeredBy` (list of {serviceName, instanceId,
+             host, port} per DashboardController#getCombinedWorkflowDefinitions),
+             not `registeredServices`. -->
+        <div v-if="wf.registeredBy?.length" class="mt-2 flex flex-wrap gap-1">
           <span
-            v-for="svc in wf.registeredServices"
-            :key="svc"
+            v-for="svc in wf.registeredBy"
+            :key="svc.serviceName + (svc.instanceId ?? '')"
             class="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600"
           >
-            {{ svc }}
+            {{ svc.serviceName }}
           </span>
         </div>
       </div>
