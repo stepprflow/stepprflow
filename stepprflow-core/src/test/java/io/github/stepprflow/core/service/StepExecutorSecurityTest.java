@@ -81,6 +81,10 @@ class StepExecutorSecurityTest {
 
         testWorkflow = new TestWorkflow();
 
+        // Trusted-package enforcement is off by default (opt-in).
+        org.mockito.Mockito.lenient().when(properties.getSecurity())
+                .thenReturn(new StepprFlowProperties.Security());
+
         testMessage = WorkflowMessage.builder()
                 .executionId("exec-123")
                 .correlationId("corr-456")
