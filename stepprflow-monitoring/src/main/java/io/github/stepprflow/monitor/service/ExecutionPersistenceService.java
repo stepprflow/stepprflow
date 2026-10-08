@@ -6,6 +6,7 @@ import io.github.stepprflow.core.model.WorkflowDefinition;
 import io.github.stepprflow.core.model.WorkflowMessage;
 import io.github.stepprflow.core.model.WorkflowStatus;
 import io.github.stepprflow.core.service.WorkflowRegistry;
+import io.github.stepprflow.monitor.model.RegisteredWorkflow;
 import io.github.stepprflow.monitor.model.WorkflowExecution;
 import io.github.stepprflow.monitor.repository.RegisteredWorkflowRepository;
 import io.github.stepprflow.monitor.repository.WorkflowExecutionRepository;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Service that persists workflow execution state to MongoDB.
@@ -102,7 +104,7 @@ public class ExecutionPersistenceService {
         // Enrich totalSteps from registered workflows when not provided (cross-service start)
         int totalSteps = message.getTotalSteps();
         if (totalSteps == 0) {
-            totalSteps = resolveStepsFromRegistry(message.getTopic());
+            totalSteps = resolveStepsFromRegistry(message.getTopic(), message.getServiceName());
         }
 
         return WorkflowExecution.builder()
@@ -126,12 +128,25 @@ public class ExecutionPersistenceService {
      * <p>The unique index on {@code RegisteredWorkflow} is the compound key
      * {@code (topic, serviceName)}, not {@code topic} alone: a topic
      * legitimately registered by several services has several matching
-     * documents. {@link RegisteredWorkflowRepository#findFirstByTopic} is
-     * used instead of {@code findByTopic} so this never throws in that case
-     * — the step count for a given topic is identical across every service
-     * that registers it, so taking the first match is correct.</p>
+     * documents. When the message carries a {@code serviceName}, it is used
+     * to resolve the exact registration via
+     * {@link RegisteredWorkflowRepository#findByTopicAndServiceName} —
+     * different services registering the same topic are not guaranteed to
+     * declare the same step count, so picking an arbitrary match could
+     * silently resolve to the wrong {@code totalSteps}. Only when
+     * {@code serviceName} is absent, blank, or not registered for this topic
+     * does this fall back to
+     * {@link RegisteredWorkflowRepository#findFirstByTopic}, which never
+     * throws but may pick an arbitrary registration.</p>
      */
-    private int resolveStepsFromRegistry(String topic) {
+    private int resolveStepsFromRegistry(String topic, String serviceName) {
+        if (serviceName != null && !serviceName.isBlank()) {
+            Optional<RegisteredWorkflow> byService =
+                    registeredWorkflowRepository.findByTopicAndServiceName(topic, serviceName);
+            if (byService.isPresent()) {
+                return byService.get().getSteps().size();
+            }
+        }
         return registeredWorkflowRepository.findFirstByTopic(topic)
                 .map(rw -> rw.getSteps().size())
                 .orElse(0);

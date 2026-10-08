@@ -927,5 +927,86 @@ class ExecutionPersistenceServiceTest {
             WorkflowExecution saved = executionCaptor.getValue();
             assertThat(saved.getTotalSteps()).isZero();
         }
+
+        @Test
+        @DisplayName("Should resolve via findByTopicAndServiceName when the message carries a serviceName, "
+                + "even if another service registered a different step count for the same topic")
+        void shouldPreferServiceNameMatchOverArbitraryFirstMatch() {
+            // findFirstByTopic picks an arbitrary registration: if two services
+            // register the same topic with a DIFFERENT step count, that would
+            // silently produce a wrong totalSteps. The message already carries
+            // the producing service's name (WorkflowMessage.serviceName), so it
+            // must be used to disambiguate instead.
+            when(repository.findById("exec-123")).thenReturn(Optional.empty());
+
+            RegisteredWorkflow registeredBySales = RegisteredWorkflow.builder()
+                    .topic("test-topic")
+                    .serviceName("cockpit-svc-sales")
+                    .steps(List.of(
+                            RegisteredWorkflow.StepInfo.builder().id(1).label("Step 1").build(),
+                            RegisteredWorkflow.StepInfo.builder().id(2).label("Step 2").build(),
+                            RegisteredWorkflow.StepInfo.builder().id(3).label("Step 3").build(),
+                            RegisteredWorkflow.StepInfo.builder().id(4).label("Step 4").build(),
+                            RegisteredWorkflow.StepInfo.builder().id(5).label("Step 5").build()))
+                    .build();
+            when(registeredWorkflowRepository.findByTopicAndServiceName("test-topic", "cockpit-svc-sales"))
+                    .thenReturn(Optional.of(registeredBySales));
+
+            // A different service registered the same topic with a DIFFERENT step
+            // count. findFirstByTopic would pick this one if serviceName were
+            // ignored, yielding the wrong totalSteps. Lenient: must never be
+            // consulted since the service-specific match is present.
+            RegisteredWorkflow registeredByReferences = RegisteredWorkflow.builder()
+                    .topic("test-topic")
+                    .serviceName("cockpit-svc-references")
+                    .steps(List.of(
+                            RegisteredWorkflow.StepInfo.builder().id(1).label("Step 1").build(),
+                            RegisteredWorkflow.StepInfo.builder().id(2).label("Step 2").build(),
+                            RegisteredWorkflow.StepInfo.builder().id(3).label("Step 3").build()))
+                    .build();
+            lenient().when(registeredWorkflowRepository.findFirstByTopic("test-topic"))
+                    .thenReturn(Optional.of(registeredByReferences));
+
+            testMessage = testMessage.toBuilder()
+                    .serviceName("cockpit-svc-sales")
+                    .totalSteps(0)
+                    .build();
+
+            persistenceService.onWorkflowMessage(testMessage);
+
+            verify(repository).save(executionCaptor.capture());
+            WorkflowExecution saved = executionCaptor.getValue();
+            assertThat(saved.getTotalSteps()).isEqualTo(5);
+            verify(registeredWorkflowRepository, never()).findFirstByTopic(any());
+        }
+
+        @Test
+        @DisplayName("Should fall back to findFirstByTopic when the message's serviceName is not registered for the topic")
+        void shouldFallBackToFindFirstByTopicWhenServiceNameNotRegistered() {
+            when(repository.findById("exec-123")).thenReturn(Optional.empty());
+            when(registeredWorkflowRepository.findByTopicAndServiceName("test-topic", "cockpit-svc-unknown"))
+                    .thenReturn(Optional.empty());
+
+            RegisteredWorkflow registeredByAnotherService = RegisteredWorkflow.builder()
+                    .topic("test-topic")
+                    .serviceName("cockpit-svc-references")
+                    .steps(List.of(
+                            RegisteredWorkflow.StepInfo.builder().id(1).label("Step 1").build(),
+                            RegisteredWorkflow.StepInfo.builder().id(2).label("Step 2").build()))
+                    .build();
+            when(registeredWorkflowRepository.findFirstByTopic("test-topic"))
+                    .thenReturn(Optional.of(registeredByAnotherService));
+
+            testMessage = testMessage.toBuilder()
+                    .serviceName("cockpit-svc-unknown")
+                    .totalSteps(0)
+                    .build();
+
+            persistenceService.onWorkflowMessage(testMessage);
+
+            verify(repository).save(executionCaptor.capture());
+            WorkflowExecution saved = executionCaptor.getValue();
+            assertThat(saved.getTotalSteps()).isEqualTo(2);
+        }
     }
 }

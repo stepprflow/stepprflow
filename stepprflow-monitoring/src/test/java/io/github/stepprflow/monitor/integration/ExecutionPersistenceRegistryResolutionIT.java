@@ -95,4 +95,52 @@ class ExecutionPersistenceRegistryResolutionIT extends MongoDBTestContainerConfi
                 .orElseThrow(() -> new AssertionError("execution was not persisted"));
         assertThat(saved.getTotalSteps()).isEqualTo(3);
     }
+
+    @Test
+    @DisplayName("resolves totalSteps via the message's serviceName when two services "
+            + "register the same topic with a DIFFERENT step count")
+    void resolvesStepsUsingServiceNameWhenStepCountsDiffer() {
+        registeredWorkflowRepository.save(RegisteredWorkflow.builder()
+                .topic("references-events")
+                .serviceName("cockpit-svc-sales")
+                .steps(List.of(
+                        RegisteredWorkflow.StepInfo.builder().id(1).label("Step 1").build(),
+                        RegisteredWorkflow.StepInfo.builder().id(2).label("Step 2").build(),
+                        RegisteredWorkflow.StepInfo.builder().id(3).label("Step 3").build(),
+                        RegisteredWorkflow.StepInfo.builder().id(4).label("Step 4").build(),
+                        RegisteredWorkflow.StepInfo.builder().id(5).label("Step 5").build()))
+                .registeredBy(new HashSet<>())
+                .status(RegisteredWorkflow.Status.ACTIVE)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build());
+
+        registeredWorkflowRepository.save(RegisteredWorkflow.builder()
+                .topic("references-events")
+                .serviceName("cockpit-svc-references")
+                .steps(List.of(
+                        RegisteredWorkflow.StepInfo.builder().id(1).label("Step 1").build(),
+                        RegisteredWorkflow.StepInfo.builder().id(2).label("Step 2").build()))
+                .registeredBy(new HashSet<>())
+                .status(RegisteredWorkflow.Status.ACTIVE)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build());
+
+        WorkflowMessage message = WorkflowMessage.builder()
+                .executionId("exec-service-disambiguated")
+                .topic("references-events")
+                .serviceName("cockpit-svc-sales")
+                .currentStep(1)
+                .totalSteps(0)
+                .status(WorkflowStatus.IN_PROGRESS)
+                .createdAt(Instant.now())
+                .build();
+
+        persistenceService.onWorkflowMessage(message);
+
+        WorkflowExecution saved = workflowExecutionRepository.findById("exec-service-disambiguated")
+                .orElseThrow(() -> new AssertionError("execution was not persisted"));
+        assertThat(saved.getTotalSteps()).isEqualTo(5);
+    }
 }
