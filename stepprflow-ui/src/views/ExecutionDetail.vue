@@ -114,11 +114,11 @@
       <dl class="grid grid-cols-3 gap-4 text-sm">
         <div>
           <dt class="text-gray-500">Attempt</dt>
-          <dd class="font-medium text-gray-900">{{ exec.retryInfo.currentAttempt ?? '-' }}</dd>
+          <dd class="font-medium text-gray-900">{{ exec.retryInfo.attempt ?? '-' }}</dd>
         </div>
         <div>
           <dt class="text-gray-500">Max Retries</dt>
-          <dd class="text-gray-900">{{ exec.retryInfo.maxRetries ?? '-' }}</dd>
+          <dd class="text-gray-900">{{ exec.retryInfo.maxAttempts ?? '-' }}</dd>
         </div>
         <div>
           <dt class="text-gray-500">Next Retry</dt>
