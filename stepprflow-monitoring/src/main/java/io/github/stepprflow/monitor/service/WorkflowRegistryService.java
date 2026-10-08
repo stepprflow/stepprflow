@@ -154,9 +154,18 @@ public class WorkflowRegistryService {
 
     /**
      * Get workflow by topic.
+     *
+     * <p>Uses {@link RegisteredWorkflowRepository#findFirstByTopic} rather
+     * than {@code findByTopic}: the unique index on this collection is the
+     * compound key {@code (topic, serviceName)}, not {@code topic} alone, so
+     * a topic registered by several services has several matching documents
+     * and the derived {@code findByTopic} query would throw. There is no
+     * {@code serviceName} to disambiguate with at this call site (exposed via
+     * {@code GET /api/registry/workflows/{topic}}), so the first match is
+     * returned.</p>
      */
     public RegisteredWorkflow getWorkflow(String topic) {
-        return repository.findByTopic(topic).orElse(null);
+        return repository.findFirstByTopic(topic).orElse(null);
     }
 
     /**

@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.env.Environment;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
@@ -64,6 +65,18 @@ public class ServerKafkaConfiguration {
         deserializer.setUseTypeHeaders(false);
 
         return new DefaultKafkaConsumerFactory<>(config, new StringDeserializer(), deserializer);
+    }
+
+    /**
+     * Resolves the effective topic-pattern used by
+     * {@code MonitoringKafkaListener}, deriving it from
+     * {@code stepprflow.kafka.workflow-topics} when
+     * {@code stepprflow.kafka.topic-pattern} is not explicitly configured.
+     */
+    @Bean
+    public MonitoringTopicPatternResolver monitoringTopicPatternResolver(
+            Environment environment, StepprFlowProperties properties) {
+        return new MonitoringTopicPatternResolver(environment, properties);
     }
 
     /**
