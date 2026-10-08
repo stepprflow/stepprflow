@@ -334,27 +334,32 @@
       <div class="code reveal">
         <div class="ct"><span class="tag">pom.xml</span> — core + Kafka
           <button class="copy" data-copy="maven">Copy</button></div>
-        <pre id="maven"><code><span class="cc">&lt;!-- workflow engine --&gt;</span>
+        <pre id="maven"><code><span class="cc">&lt;!-- set once; see the latest on Maven Central --&gt;</span>
+<span class="ck">&lt;properties&gt;</span>
+  <span class="ck">&lt;stepprflow.version&gt;</span>1.1.1<span class="ck">&lt;/stepprflow.version&gt;</span>
+<span class="ck">&lt;/properties&gt;</span>
+
+<span class="cc">&lt;!-- workflow engine --&gt;</span>
 <span class="ck">&lt;dependency&gt;</span>
   <span class="ck">&lt;groupId&gt;</span>io.github.stepprflow<span class="ck">&lt;/groupId&gt;</span>
   <span class="ck">&lt;artifactId&gt;</span>stepprflow-core<span class="ck">&lt;/artifactId&gt;</span>
-  <span class="ck">&lt;version&gt;</span>1.1.0<span class="ck">&lt;/version&gt;</span>
+  <span class="ck">&lt;version&gt;</span>${stepprflow.version}<span class="ck">&lt;/version&gt;</span>
 <span class="ck">&lt;/dependency&gt;</span>
 <span class="cc">&lt;!-- Kafka adapter (or -spring-rabbitmq) --&gt;</span>
 <span class="ck">&lt;dependency&gt;</span>
   <span class="ck">&lt;groupId&gt;</span>io.github.stepprflow<span class="ck">&lt;/groupId&gt;</span>
   <span class="ck">&lt;artifactId&gt;</span>stepprflow-spring-kafka<span class="ck">&lt;/artifactId&gt;</span>
-  <span class="ck">&lt;version&gt;</span>1.1.0<span class="ck">&lt;/version&gt;</span>
+  <span class="ck">&lt;version&gt;</span>${stepprflow.version}<span class="ck">&lt;/version&gt;</span>
 <span class="ck">&lt;/dependency&gt;</span></code></pre>
       </div>
       <div class="code reveal">
         <div class="ct"><span class="tag">shell</span> — run the monitor
           <button class="copy" data-copy="docker">Copy</button></div>
         <pre id="docker"><code><span class="cc"># pull the monitoring dashboard + API</span>
-<span class="cp">docker</span> pull alimhin/stepprflow-monitor:1.1.0
+<span class="cp">docker</span> pull alimhin/stepprflow-monitor:latest
 
 <span class="cc"># or from GitHub Container Registry</span>
-<span class="cp">docker</span> pull ghcr.io/stepprflow/stepprflow-monitor:1.1.0
+<span class="cp">docker</span> pull ghcr.io/stepprflow/stepprflow-monitor:latest
 
 <span class="cc"># then define a workflow:</span>
 <span class="ck">@Topic</span>(<span class="cp">"order-workflow"</span>)
