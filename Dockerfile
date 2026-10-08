@@ -9,7 +9,7 @@
 # frontend-maven-plugin, which downloads an official Node.js binary linked
 # against glibc. That binary cannot run on Alpine's musl, so the frontend build
 # (and therefore the whole package) would fail on an Alpine builder.
-FROM maven:3.9-eclipse-temurin-21 AS builder
+FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS builder
 
 WORKDIR /app
 
