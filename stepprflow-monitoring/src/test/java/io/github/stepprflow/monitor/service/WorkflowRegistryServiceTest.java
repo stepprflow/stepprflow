@@ -15,6 +15,7 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.IncorrectResultSizeDataAccessException;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -611,7 +612,7 @@ class WorkflowRegistryServiceTest {
                     .id("wf-1")
                     .topic("test-topic")
                     .build();
-            when(repository.findByTopic("test-topic")).thenReturn(Optional.of(wf));
+            when(repository.findFirstByTopic("test-topic")).thenReturn(Optional.of(wf));
 
             RegisteredWorkflow result = registryService.getWorkflow("test-topic");
 
@@ -622,11 +623,33 @@ class WorkflowRegistryServiceTest {
         @Test
         @DisplayName("Should return null when not found")
         void shouldReturnNullWhenNotFound() {
-            when(repository.findByTopic("unknown")).thenReturn(Optional.empty());
+            when(repository.findFirstByTopic("unknown")).thenReturn(Optional.empty());
 
             RegisteredWorkflow result = registryService.getWorkflow("unknown");
 
             assertThat(result).isNull();
+        }
+
+        @Test
+        @DisplayName("Should return a workflow instead of crashing when the topic is registered by multiple services")
+        void shouldResolveWorkflowWhenTopicRegisteredByMultipleServices() {
+            // Same production bug as ExecutionPersistenceService.resolveStepsFromRegistry:
+            // the unique index is (topic, serviceName), not topic alone, so findByTopic
+            // throws as soon as more than one service registers the same topic. Exposed
+            // via GET /api/registry/workflows/{topic} (RegistryController).
+            lenient().when(repository.findByTopic("references-events"))
+                    .thenThrow(new IncorrectResultSizeDataAccessException(1, 2));
+            RegisteredWorkflow registeredByOneOfTheServices = RegisteredWorkflow.builder()
+                    .id("wf-references")
+                    .topic("references-events")
+                    .build();
+            when(repository.findFirstByTopic("references-events"))
+                    .thenReturn(Optional.of(registeredByOneOfTheServices));
+
+            RegisteredWorkflow result = registryService.getWorkflow("references-events");
+
+            assertThat(result).isNotNull();
+            assertThat(result.getTopic()).isEqualTo("references-events");
         }
     }
 
