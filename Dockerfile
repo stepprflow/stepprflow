@@ -67,9 +67,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user for security
-RUN groupadd -g 1000 stepprflow && \
-    useradd -u 1000 -g stepprflow -s /bin/sh -m stepprflow
+# Create non-root user for security. Use a system account (id < 1000): the
+# Ubuntu base already ships a user/group at GID/UID 1000.
+RUN groupadd --system stepprflow && \
+    useradd --system -g stepprflow -s /bin/sh stepprflow
 
 # Copy layers in order of change frequency (less frequent first)
 COPY --from=layers /app/dependencies/ ./
