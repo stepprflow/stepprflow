@@ -12,7 +12,7 @@ This module provides RabbitMQ-based message transport for Steppr Flow workflows,
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-spring-rabbitmq</artifactId>
-    <version>1.1.1</version>
+    <version>${stepprflow.version}</version>
 </dependency>
 ```
 

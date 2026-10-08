@@ -41,17 +41,25 @@ Steppr Flow enables you to build resilient, async multi-step workflows with supp
 
 ### 1. Add Dependencies
 
+> Set the version once; see the latest on [Maven Central](https://central.sonatype.com/artifact/io.github.stepprflow/stepprflow-core).
+>
+> ```xml
+> <properties>
+>     <stepprflow.version>1.1.1</stepprflow.version>
+> </properties>
+> ```
+
 **Maven (Kafka - default):**
 ```xml
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-core</artifactId>
-    <version>1.1.1</version>
+    <version>${stepprflow.version}</version>
 </dependency>
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-spring-kafka</artifactId>
-    <version>1.1.1</version>
+    <version>${stepprflow.version}</version>
 </dependency>
 ```
 
@@ -60,12 +68,12 @@ Steppr Flow enables you to build resilient, async multi-step workflows with supp
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-core</artifactId>
-    <version>1.1.1</version>
+    <version>${stepprflow.version}</version>
 </dependency>
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-spring-rabbitmq</artifactId>
-    <version>1.1.1</version>
+    <version>${stepprflow.version}</version>
 </dependency>
 ```
 
@@ -74,7 +82,7 @@ Steppr Flow enables you to build resilient, async multi-step workflows with supp
 <dependency>
     <groupId>io.github.stepprflow</groupId>
     <artifactId>stepprflow-monitoring</artifactId>
-    <version>1.1.1</version>
+    <version>${stepprflow.version}</version>
 </dependency>
 ```
 
