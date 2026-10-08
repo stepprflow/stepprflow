@@ -19,6 +19,12 @@ import org.springframework.kafka.support.Acknowledgment;
  * explicitly — independently of {@code stepprflow.kafka.topic-pattern}. Each
  * instance uses its own consumer group (unique per JVM) so an ANNOUNCE reaches
  * <em>every</em> running instance, not just one group member.</p>
+ *
+ * <p>The per-JVM group is brand new on every start, so {@code auto.offset.reset}
+ * is pinned to {@code latest} here: without it the default {@code earliest} would
+ * replay the whole registration-topic history on each start, re-registering once
+ * per historical ANNOUNCE and churning ephemeral consumer groups. We only care
+ * about announcements that arrive while this instance is live.</p>
  */
 @RequiredArgsConstructor
 @Slf4j
@@ -29,7 +35,8 @@ public class RegistrationAnnounceListener {
     @KafkaListener(
             topics = WorkflowRegistrationRequest.REGISTRATION_TOPIC,
             containerFactory = "workflowKafkaListenerContainerFactory",
-            groupId = "stepprflow-announce-#{T(java.util.UUID).randomUUID().toString()}"
+            groupId = "stepprflow-announce-#{T(java.util.UUID).randomUUID().toString()}",
+            properties = {"auto.offset.reset=latest"}
     )
     public void onRegistration(final ConsumerRecord<String, WorkflowMessage> record,
             final Acknowledgment ack) {
