@@ -45,18 +45,14 @@
         <tag>HEAD</tag>
     </scm>
 
-    <distributionManagement>
-        <repository>
-            <id>maven-releases</id>
-            <name>Ali Happy Kids Nexus Releases</name>
-            <url>https://repository.alihappykids.fr/repository/maven-releases</url>
-        </repository>
-        <snapshotRepository>
-            <id>maven-snapshots</id>
-            <name>Ali Happy Kids Nexus Snapshots</name>
-            <url>https://repository.alihappykids.fr/repository/maven-snapshots</url>
-        </snapshotRepository>
-    </distributionManagement>
+    <!--
+        No <distributionManagement>: releases are published to Maven Central by
+        the central-publishing-maven-plugin (profile "release", extensions=true),
+        and the GitHub Packages step deploys with an explicit
+        -DaltDeploymentRepository. Declaring the private Nexus here made the
+        release build query it for SNAPSHOT metadata and fail with 401 on CI
+        (no Nexus credentials) — the OSS build must not depend on a private repo.
+    -->
 
     <modules>
         <module>stepprflow-core</module>
