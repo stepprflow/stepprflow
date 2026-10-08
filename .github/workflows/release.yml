@@ -123,8 +123,12 @@ jobs:
             echo "Bumping to: $NEW_VERSION"
           fi
 
+      # Runs for BOTH tag and dispatch: on a tag push the checked-out commit is
+      # still at X.Y.Z-SNAPSHOT, so the release build must set the POMs to the
+      # release version (stripped from the tag) before build/deploy — otherwise
+      # a SNAPSHOT is deployed and Central rejects it (403). Applied to the CI
+      # checkout only; main is not modified by a tag release.
       - name: Update version in POMs
-        if: steps.resolve-version.outputs.mode == 'dispatch'
         run: |
           mvn versions:set -DnewVersion=${{ steps.resolve-version.outputs.version }} -DgenerateBackupPoms=false
           mvn versions:commit
