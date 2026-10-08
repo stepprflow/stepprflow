@@ -4,7 +4,6 @@ import io.github.stepprflow.core.broker.MessageBroker;
 import io.github.stepprflow.core.model.RetryInfo;
 import io.github.stepprflow.core.model.WorkflowMessage;
 import io.github.stepprflow.core.model.WorkflowStatus;
-import io.github.stepprflow.monitor.MonitorProperties;
 import io.github.stepprflow.monitor.model.WorkflowExecution;
 import io.github.stepprflow.monitor.repository.WorkflowExecutionRepository;
 import io.github.stepprflow.monitor.util.WorkflowMessageFactory;
@@ -19,7 +18,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -38,9 +36,6 @@ class RetrySchedulerServiceTest {
 
     @Mock
     private MessageBroker messageBroker;
-
-    @Mock
-    private MonitorProperties properties;
 
     @Mock
     private WorkflowMessageFactory messageFactory;
@@ -209,100 +204,6 @@ class RetrySchedulerServiceTest {
             retrySchedulerService.processPendingRetries();
 
             verify(messageBroker).send(eq("test-topic"), eq(testMessage));
-        }
-    }
-
-    @Nested
-    @DisplayName("cleanupOldExecutions() method")
-    class CleanupOldExecutionsTests {
-
-        @BeforeEach
-        void setUpRetention() {
-            MonitorProperties.Retention retention = new MonitorProperties.Retention();
-            retention.setCompletedTtl(Duration.ofDays(7));
-            retention.setFailedTtl(Duration.ofDays(30));
-            when(properties.getRetention()).thenReturn(retention);
-        }
-
-        @Test
-        @DisplayName("Should delete old completed executions")
-        void shouldDeleteOldCompletedExecutions() {
-            WorkflowExecution oldCompleted = WorkflowExecution.builder()
-                    .executionId("old-completed")
-                    .status(WorkflowStatus.COMPLETED)
-                    .build();
-            when(repository.findCompletedBefore(any(Instant.class)))
-                    .thenReturn(List.of(oldCompleted));
-            when(repository.findFailedBefore(any(Instant.class)))
-                    .thenReturn(List.of());
-
-            retrySchedulerService.cleanupOldExecutions();
-
-            verify(repository).deleteAll(List.of(oldCompleted));
-        }
-
-        @Test
-        @DisplayName("Should delete old failed executions")
-        void shouldDeleteOldFailedExecutions() {
-            WorkflowExecution oldFailed = WorkflowExecution.builder()
-                    .executionId("old-failed")
-                    .status(WorkflowStatus.FAILED)
-                    .build();
-            when(repository.findCompletedBefore(any(Instant.class)))
-                    .thenReturn(List.of());
-            when(repository.findFailedBefore(any(Instant.class)))
-                    .thenReturn(List.of(oldFailed));
-
-            retrySchedulerService.cleanupOldExecutions();
-
-            verify(repository).deleteAll(List.of(oldFailed));
-        }
-
-        @Test
-        @DisplayName("Should not delete anything when no old executions")
-        void shouldNotDeleteAnythingWhenNoOldExecutions() {
-            when(repository.findCompletedBefore(any(Instant.class))).thenReturn(List.of());
-            when(repository.findFailedBefore(any(Instant.class))).thenReturn(List.of());
-
-            retrySchedulerService.cleanupOldExecutions();
-
-            verify(repository, never()).deleteAll(any());
-        }
-
-        @Test
-        @DisplayName("Should use correct TTL for completed executions")
-        void shouldUseCorrectTtlForCompletedExecutions() {
-            when(repository.findCompletedBefore(any(Instant.class))).thenReturn(List.of());
-            when(repository.findFailedBefore(any(Instant.class))).thenReturn(List.of());
-
-            ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
-
-            retrySchedulerService.cleanupOldExecutions();
-
-            verify(repository).findCompletedBefore(cutoffCaptor.capture());
-            Instant cutoff = cutoffCaptor.getValue();
-
-            // Cutoff should be approximately 7 days ago
-            Instant expectedCutoff = Instant.now().minus(Duration.ofDays(7));
-            assertThat(cutoff).isBetween(expectedCutoff.minusSeconds(1), expectedCutoff.plusSeconds(1));
-        }
-
-        @Test
-        @DisplayName("Should use correct TTL for failed executions")
-        void shouldUseCorrectTtlForFailedExecutions() {
-            when(repository.findCompletedBefore(any(Instant.class))).thenReturn(List.of());
-            when(repository.findFailedBefore(any(Instant.class))).thenReturn(List.of());
-
-            ArgumentCaptor<Instant> cutoffCaptor = ArgumentCaptor.forClass(Instant.class);
-
-            retrySchedulerService.cleanupOldExecutions();
-
-            verify(repository).findFailedBefore(cutoffCaptor.capture());
-            Instant cutoff = cutoffCaptor.getValue();
-
-            // Cutoff should be approximately 30 days ago
-            Instant expectedCutoff = Instant.now().minus(Duration.ofDays(30));
-            assertThat(cutoff).isBetween(expectedCutoff.minusSeconds(1), expectedCutoff.plusSeconds(1));
         }
     }
 

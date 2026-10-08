@@ -9,6 +9,7 @@ import io.github.stepprflow.monitor.controller.GlobalExceptionHandler;
 import io.github.stepprflow.monitor.controller.HealthController;
 import io.github.stepprflow.monitor.controller.OutboxController;
 import io.github.stepprflow.monitor.controller.RegistryController;
+import io.github.stepprflow.monitor.controller.RetentionController;
 import io.github.stepprflow.monitor.controller.WorkflowController;
 import io.github.stepprflow.monitor.outbox.OutboxMessageRepository;
 import io.github.stepprflow.monitor.repository.WorkflowExecutionRepository;
@@ -16,6 +17,7 @@ import io.github.stepprflow.monitor.outbox.OutboxRelayService;
 import io.github.stepprflow.monitor.outbox.OutboxService;
 import io.github.stepprflow.monitor.service.ExecutionPersistenceService;
 import io.github.stepprflow.monitor.service.PayloadManagementService;
+import io.github.stepprflow.monitor.service.RetentionService;
 import io.github.stepprflow.monitor.service.RetrySchedulerService;
 import io.github.stepprflow.monitor.service.WorkflowCommandService;
 import io.github.stepprflow.monitor.service.WorkflowQueryService;
@@ -57,8 +59,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         HealthController.class,
         OutboxController.class,
         RegistryController.class,
+        RetentionController.class,
         ExecutionPersistenceService.class,
         RetrySchedulerService.class,
+        RetentionService.class,
         WorkflowQueryService.class,
         WorkflowCommandService.class,
         PayloadManagementService.class,

@@ -50,9 +50,23 @@ stepprflow:
     retry:
       enabled: true
       poll-interval: 30s
-    cleanup:
+    # Retention/purge of workflow_executions. These keys actually bind to
+    # MonitorProperties.Retention (F6: the previous "cleanup.*" keys below
+    # did NOT bind to anything and were silently ignored):
+    #   retention.enabled        - master on/off switch for the scheduled purge job
+    #   retention.max-age        - age (based on updatedAt, falling back to
+    #                              createdAt), REGARDLESS OF STATUS, after which an
+    #                              execution is purged. Applies to stuck executions
+    #                              (IN_PROGRESS/PENDING/RETRY_PENDING) and CANCELLED
+    #                              ones too, not just COMPLETED/FAILED (F2/F11).
+    #   retention.completed-ttl  - optional override for COMPLETED only (falls
+    #                              back to max-age when unset)
+    #   retention.failed-ttl     - optional override for FAILED only (falls
+    #                              back to max-age when unset)
+    #   retention.cleanup-cron   - cron expression for the scheduled purge job
+    retention:
       enabled: true
-      retention-days: 30
+      max-age: 30d
     # SF-5 — authentication for the monitoring API, dashboard and WebSocket.
     # No default is set on purpose: until a mode is chosen the security filter
     # chain denies every request (fail-closed). Pick ONE mode per deployment:

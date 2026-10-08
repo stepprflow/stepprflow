@@ -49,16 +49,38 @@ public interface WorkflowExecutionRepository extends MongoRepository<WorkflowExe
     List<WorkflowExecution> findPendingRetries(Instant now);
 
     /**
-     * Find completed executions older than given date.
+     * Deletes executions with the given status whose age exceeds the given
+     * cutoff. Age is based on {@code updatedAt}, falling back to
+     * {@code createdAt} when {@code updatedAt} is absent or null. Executed
+     * server-side by MongoDB (no in-memory loading of matched documents).
+     *
+     * @param status the execution status to target
+     * @param cutoff executions older than this instant are deleted
+     * @return the number of deleted documents
      */
-    @Query("{'status': 'COMPLETED', 'completedAt': {'$lt': ?0}}")
-    List<WorkflowExecution> findCompletedBefore(Instant date);
+    @Query(value = "{ 'status': ?0, '$or': [ "
+            + "{ 'updatedAt': { '$lt': ?1 } }, "
+            + "{ 'updatedAt': null, 'createdAt': { '$lt': ?1 } } "
+            + "] }", delete = true)
+    long deleteByStatusAndAgeBefore(WorkflowStatus status, Instant cutoff);
 
     /**
-     * Find failed executions older than given date.
+     * Deletes executions whose status is NOT among {@code excludedStatuses} and
+     * whose age exceeds the given cutoff. Age is based on {@code updatedAt},
+     * falling back to {@code createdAt} when {@code updatedAt} is absent or
+     * null. Used to purge stuck executions ({@code IN_PROGRESS}/
+     * {@code PENDING}/{@code RETRY_PENDING}) and {@code CANCELLED} ones,
+     * regardless of status, server-side (no in-memory loading).
+     *
+     * @param excludedStatuses statuses handled by their own dedicated TTL and skipped here
+     * @param cutoff executions older than this instant are deleted
+     * @return the number of deleted documents
      */
-    @Query("{'status': 'FAILED', 'completedAt': {'$lt': ?0}}")
-    List<WorkflowExecution> findFailedBefore(Instant date);
+    @Query(value = "{ 'status': { '$nin': ?0 }, '$or': [ "
+            + "{ 'updatedAt': { '$lt': ?1 } }, "
+            + "{ 'updatedAt': null, 'createdAt': { '$lt': ?1 } } "
+            + "] }", delete = true)
+    long deleteByStatusNotInAndAgeBefore(List<WorkflowStatus> excludedStatuses, Instant cutoff);
 
     /**
      * Count by status.
