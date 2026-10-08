@@ -84,4 +84,22 @@ class MonitorSecurityIT extends MongoDBTestContainerConfig {
                 .andReturn().getResponse().getStatus();
         assertThat(statusCode).isNotIn(401, 403);
     }
+
+    @Test
+    @DisplayName("Root static assets referenced by the UI shell are public (logo, favicon)")
+    void rootStaticAssetsArePublic() throws Exception {
+        // The login page renders <img src="/stepprflow-logo.png"> and the favicon
+        // before the user authenticates. If these are not public the browser's
+        // request for them is rejected, the image is broken on the login screen,
+        // and — worse — that rejected request becomes Spring Security's saved
+        // request, so the post-login redirect lands on the image instead of the
+        // dashboard. They must never require authentication.
+        for (final String path : new String[] {"/stepprflow-logo.png", "/favicon.svg"}) {
+            final int statusCode = mockMvc.perform(get(path))
+                    .andReturn().getResponse().getStatus();
+            assertThat(statusCode)
+                    .as("%s must be publicly reachable (not 401 Unauthorized)", path)
+                    .isNotEqualTo(401);
+        }
+    }
 }

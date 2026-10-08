@@ -69,7 +69,7 @@ public class MonitorSecurityConfig {
     private static final String[] PUBLIC_PATHS = {
         "/api/auth/config",
         "/actuator/health", "/actuator/health/**", "/actuator/info",
-        "/login", "/error", "/favicon.ico",
+        "/login", "/error", "/favicon.ico", "/favicon.svg", "/stepprflow-logo.png",
         "/", "/index.html", "/assets/**", "/static/**", "/css/**", "/js/**", "/img/**"
     };
 
@@ -132,8 +132,15 @@ public class MonitorSecurityConfig {
                 new AntPathRequestMatcher("/api/**")));
 
         if (oidc) {
-            http.oauth2Login(login -> login.userInfoEndpoint(
-                ui -> ui.userAuthoritiesMapper(oidcAuthoritiesMapper(properties))));
+            http.oauth2Login(login -> login
+                // Always land on the SPA root after login. Without this the
+                // SavedRequestAwareAuthenticationSuccessHandler replays the
+                // request that first tripped auth — often a static asset the
+                // login page requested (e.g. the logo) — sending the user to
+                // an image instead of the dashboard.
+                .defaultSuccessUrl("/", true)
+                .userInfoEndpoint(
+                    ui -> ui.userAuthoritiesMapper(oidcAuthoritiesMapper(properties))));
             http.logout(logout -> logout.logoutSuccessUrl("/"));
         } else {
             http.formLogin(Customizer.withDefaults());
