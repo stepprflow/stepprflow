@@ -68,7 +68,16 @@
       <OutboxPanel :outbox="metricsStore.outbox" />
     </div>
 
-    <!-- Circuit breakers -->
+    <!-- Circuit breakers: state + reset action only. These breakers
+         (broker-kafka, broker-rabbitmq, workflow-execution) protect the
+         monitor's own connection to the broker — the monitor observes
+         messages, it doesn't route business calls for the actual services.
+         So their call counters are structurally 0 and would misrepresent
+         real per-service circuit-breaker metrics (a separate, unimplemented
+         feature). Their STATE is still meaningful (it reflects whether the
+         monitor itself can currently reach the broker), so we keep it,
+         deduplicated against the Health Status panel above (see
+         HealthPanel.vue, which hides the redundant "circuitBreakers" entry). -->
     <div v-if="metricsStore.circuitBreakers.length" class="card">
       <h2 class="mb-4 text-sm font-semibold text-gray-900">Circuit Breakers</h2>
       <div class="space-y-3">
@@ -77,14 +86,7 @@
           :key="cb.name"
           class="flex items-center justify-between rounded-lg border border-gray-100 p-3"
         >
-          <div>
-            <p class="text-sm font-medium text-gray-900">{{ cb.name }}</p>
-            <div class="mt-1 flex gap-3 text-xs text-gray-500">
-              <span>Success: {{ cb.successfulCalls }}</span>
-              <span>Failed: {{ cb.failedCalls }}</span>
-              <span>Failure rate: {{ formatRate(cb.failureRate) }}%</span>
-            </div>
-          </div>
+          <p class="text-sm font-medium text-gray-900">{{ cb.name }}</p>
           <div class="flex items-center gap-2">
             <span
               class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"

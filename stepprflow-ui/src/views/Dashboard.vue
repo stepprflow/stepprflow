@@ -83,7 +83,7 @@
               <p class="text-xs text-gray-500">{{ wf.serviceName }}</p>
             </div>
             <div class="flex items-center gap-2 text-xs text-gray-400">
-              <span>{{ wf.stepCount ?? '?' }} steps</span>
+              <span>{{ wf.steps?.length ?? '?' }} steps</span>
             </div>
           </div>
         </div>
