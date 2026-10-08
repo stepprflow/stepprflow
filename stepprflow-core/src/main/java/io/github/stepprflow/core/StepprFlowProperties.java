@@ -132,6 +132,28 @@ public class StepprFlowProperties {
         private String topicPattern = ".*";
 
         /**
+         * Base workflow topics (without any stepprflow suffix) that a
+         * monitoring instance should track.
+         * <p>
+         * When set and {@code topic-pattern} is left at its default, the
+         * monitoring module derives the effective {@code topicPattern} itself
+         * by expanding each base topic with every stepprflow suffix
+         * ({@code .completed}, {@code .retry}, the configured
+         * {@code dlq.suffix}, and Spring Kafka's {@code .dlt}) plus the
+         * registration topic. This exists because manually scoping
+         * {@code topic-pattern} is error-prone: forgetting a single suffix
+         * (typically {@code .completed}) silently stops the monitor from ever
+         * seeing workflow completions, leaving executions IN_PROGRESS
+         * forever. An explicitly configured {@code topic-pattern} still takes
+         * precedence over this property, for backward compatibility.
+         * </p>
+         * <p>
+         * Ignored outside the monitoring module.
+         * </p>
+         */
+        private List<String> workflowTopics = List.of();
+
+        /**
          * Auto-create topics.
          */
         private boolean autoCreateTopics = true;

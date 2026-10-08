@@ -36,9 +36,17 @@ public class MonitoringKafkaListener {
     /**
      * Listen to all workflow topics for monitoring.
      * Uses a different consumer group than the workflow processors.
+     * <p>
+     * The pattern is resolved by {@code monitoringTopicPatternResolver}
+     * rather than a plain {@code ${...}} placeholder: when
+     * {@code stepprflow.kafka.workflow-topics} is configured (and
+     * {@code topic-pattern} is left at its default), it derives a pattern
+     * covering every stepprflow suffix for each base topic, so none can be
+     * silently forgotten (see {@code MonitoringTopicPatternResolver}).
+     * </p>
      */
     @KafkaListener(
-            topicPattern = "${stepprflow.kafka.topic-pattern:.*}",
+            topicPattern = "#{monitoringTopicPatternResolver.effectivePattern}",
             containerFactory = "workflowKafkaListenerContainerFactory",
             groupId = "${stepprflow.dashboard.consumer.group-id:stepprflow-monitoring}"
     )
