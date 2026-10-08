@@ -161,18 +161,44 @@ The roles that grant `OPERATOR` / `VIEWER` are read from the flat
 
 The monitor consumes workflow events through the broker, so the broker
 properties apply here too — most importantly the topic scope, which **must**
-include the lifecycle topics (`.completed`, `.retry`, `.dlq`) so the dashboard
-sees completions and failures:
+include every lifecycle topic (`.completed`, `.retry`, the configured DLQ
+suffix, and Spring Kafka's own `.dlt`) so the dashboard sees completions and
+failures. Forgetting a suffix — typically `.completed` — silently stops the
+dashboard from ever seeing completions: executions stay `IN_PROGRESS`
+forever. There are three ways to scope it, in priority order:
+
+1. **`stepprflow.dashboard.topic-pattern`** (recommended) — a key dedicated
+   to the monitor, so an executor pattern narrowed to `stepprflow.kafka.topic-pattern`
+   (whose semantics are "topics *this instance* processes") is never
+   copy-pasted here by mistake and missing a suffix.
+2. **`stepprflow.kafka.topic-pattern`** — kept for backward compatibility;
+   used only if the dedicated key above is not set.
+3. **`stepprflow.kafka.workflow-topics`** — list your workflows' *base*
+   topics only (no suffix) and the monitor derives the effective pattern
+   itself, expanding every one of them with every known suffix. This is the
+   safest option: you can never forget a suffix because you never write one.
 
 ```yaml
 stepprflow:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    topic-pattern: "^(my-workflow)(\\.retry|\\.completed|\\.dlq)?$"
+    # Safest: base topics only, suffixes are derived automatically.
+    workflow-topics:
+      - invoice-creation
+      - order-fulfillment
+  dashboard:
+    # Or, if you need full regex control, scope it yourself — but remember
+    # every suffix:
+    topic-pattern: "^(invoice-creation|order-fulfillment)(\\.completed|\\.retry|\\.dlq|\\.dlt)?$"
   # Opt-in strict payload deserialization (off by default — see security.md):
   security:
     trusted-package-enforcement: false
 ```
+
+A startup `WARN` is logged, and the `/actuator/health` `topicSubscription`
+indicator reports `DOWN`, whenever the effective pattern does not cover
+`.completed` for a base topic known either from `workflow-topics` or from a
+live registration in MongoDB.
 
 ---
 

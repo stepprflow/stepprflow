@@ -18,6 +18,7 @@ import io.github.stepprflow.core.idempotency.IdempotencyKey;
 import io.github.stepprflow.core.idempotency.IdempotencyStore;
 import io.github.stepprflow.core.security.UntrustedPayloadTypeException;
 import io.github.stepprflow.core.util.StackTraceUtils;
+import io.github.stepprflow.core.util.TopicConventions;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -506,7 +507,7 @@ public class StepExecutor {
 
         // Send completion message with updated payload
         WorkflowMessage completedMessage = messageWithPayload.complete();
-        messageBroker.sendSync(message.getTopic() + ".completed", completedMessage);
+        messageBroker.sendSync(TopicConventions.completedTopic(message.getTopic()), completedMessage);
     }
 
     private void handleFailure(
@@ -653,7 +654,7 @@ public class StepExecutor {
 
         // In core module, we just send to retry topic
         // The monitor module handles the scheduled retry
-        messageBroker.sendSync(message.getTopic() + ".retry", retryMessage);
+        messageBroker.sendSync(TopicConventions.retryTopic(message.getTopic()), retryMessage);
     }
 
     private void sendToDlq(
@@ -692,7 +693,7 @@ public class StepExecutor {
                 .updatedAt(Instant.now())
                 .build();
 
-        String dlqTopic = message.getTopic() + properties.getDlq().getSuffix();
+        String dlqTopic = TopicConventions.dlqTopic(message.getTopic(), properties.getDlq());
         messageBroker.sendSync(dlqTopic, dlqMessage);
 
         log.info("Sent workflow {} [{}] to DLQ: {}",
