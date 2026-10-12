@@ -334,7 +334,7 @@ jobs:
       # save a fresh one per run (unique key + prefix restore-keys), so a run
       # only fetches the NVD deltas since the last one (seconds, with the API key).
       - name: Cache OWASP NVD database
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.m2/repository/org/owasp/dependency-check-data
           key: owasp-nvd-${{ github.run_id }}
