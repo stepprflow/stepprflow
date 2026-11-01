@@ -23,7 +23,7 @@
     "autoprefixer": "^10.4.27",
     "jsdom": "^30.1.3",
     "tailwindcss": "^4.2.1",
-    "vite": "^7.3.1",
+    "vite": "^8.3.4",
     "vitest": "^3.2.4"
   }
 }
