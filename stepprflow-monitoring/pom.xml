@@ -21,7 +21,7 @@
         <!-- Frontend (stepprflow-ui) build — kept in lockstep with stepprflow-ui/pom.xml. -->
         <node.version>v22.13.1</node.version>
         <npm.version>10.9.2</npm.version>
-        <frontend-maven-plugin.version>2.0.0</frontend-maven-plugin.version>
+        <frontend-maven-plugin.version>2.0.2</frontend-maven-plugin.version>
         <frontend.skip>false</frontend.skip>
     </properties>
 
