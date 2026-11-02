@@ -48,6 +48,13 @@ updates:
       - "maven"
     commit-message:
       prefix: "build(deps)"
+    ignore:
+      # springdoc 3.x requires Spring Boot 4
+      - dependency-name: "org.springdoc:*"
+        update-types: ["version-update:semver-major"]
+      # Must stay aligned with junit-jupiter-engine (Spring Boot 3.5) in the pitest plugin config
+      - dependency-name: "org.junit.platform:junit-platform-launcher"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
